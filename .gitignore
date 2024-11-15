@@ -1,0 +1,38 @@
+# Folders
+/presentation/*
+/new_data
+/parms_pc
+/results
+/scripts/multithread
+/build
+/parms
+data/N_*/
+!data/all_data.txt
+!data/coeff_linear.txt
+.vscode
+
+
+# Ignore parms to run multithread in PC
+parms_pc_*/
+
+# Ignore all shell scripts
+scripts/*.sh
+scripts/python/*.sh
+
+# Files
+/scripts/run_all_script.txt
+
+# Ignore all folders
+*.pyc
+
+# data folders
+data/
+scripts/python/credentials.json
+scripts/python/token.json
+
+# */gml/*
+# */prop/*
+# "!.*/filenames.txt"
+# "!.*/properties_set.txt"
+# "!.*/time_process_seconds.txt"
+
