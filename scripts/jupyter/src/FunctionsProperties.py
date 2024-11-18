@@ -26,6 +26,7 @@ def make_results_folders():
         os.makedirs(path+"/network")
     else:
         pass
+
 def move_to_data():
     path = "../../data"
     if not os.path.exists(path):
@@ -34,6 +35,10 @@ def move_to_data():
     shutil.copy("../../all_data.txt", path)
     shutil.copy("../../coeff_linear.txt", path)
 
+def data_to_move():
+    path = "../../"
+    shutil.copy("../../data/all_data.txt", path)
+    shutil.copy("../../data/coeff_linear.txt", path)
 
 # All combinations (alpha_a, alpha_g) folders
 def extract_alpha_values(N, dim):
