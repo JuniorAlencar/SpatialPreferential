@@ -12,6 +12,7 @@ import statsmodels.api as sm # Linear regression
 import shutil
 import re
 
+from typing import Annotated
 
 # create folder to results
 def make_results_folders():
@@ -19,11 +20,12 @@ def make_results_folders():
     # If file in all_files, create check_folder to move files
     if not os.path.exists(path):
         os.makedirs(path)
-        os.makedirs(path+"/alpha_a")
-        os.makedirs(path+"/alpha_g")
-        os.makedirs(path+"/N")
-        os.makedirs(path+"/distributions")
-        os.makedirs(path+"/network")
+        os.makedirs(path + "/alpha_a")
+        os.makedirs(path + "/alpha_g")
+        os.makedirs(path + "/N")
+        os.makedirs(path + "/distributions")
+        os.makedirs(path + "/network")
+        os.makedirs(path + "/parameters")
     else:
         pass
 
@@ -310,69 +312,66 @@ def linear_regression(X,Y,Erro_Y,Parameter):
 
 # dataframe with all beta, xi parameters, with relative erros
 # Prop = beta(alpha_a, alpha_g, dim)*ln(N) + xi(alpha_a, alpha_g, dim)
-def beta_all(df_all, alpha_filter, dimensions, alpha_a_variable):
-    dim_lst = []
-    alpha_a_lst = []
-    alpha_g_lst = []
-
-    # Prop = beta(alpha_a, alpha_g, d)ln(N) + xi(alpha_a, alpha_g, d)
-
-    beta_short_lst = []
-    beta_short_err_lst = []
-    xi_short_lst = []
-    xi_short_err_lst = []
-
-    beta_ass_coeff_lst = []
-    beta_ass_coeff_err_lst = []
-    xi_ass_coeff_lst = []
-    xi_ass_coeff_err_lst = []
-
-    sub_df = pd.DataFrame(columns=df_all.columns)
+def parameters_calculate(df: pd.DataFrame, N: list, dimensions: list, alpha_filter: list):
     
-    if(alpha_a_variable == True):
-        for aa in alpha_filter:
-            join = df_all[(df_all['alpha_g'] == 2.0) & (df_all['alpha_a'] == aa)]
-            sub_df = pd.concat([sub_df,join], axis=0)
-        prop = 'alpha_a'
+    coeff_all = {"alpha_a":[], "alpha_g":[], "dim":[], 
+             "A_ass":[], "A_ass_err":[], "B_ass":[], "B_ass_err":[],
+             "A_diameter":[], "A_diameter_err":[], "B_diameter":[], "B_diameter_err":[],
+             "A_short":[], "A_short_err":[], "B_short":[], "B_short_err":[],}
 
-    else:
-        for ag in alpha_filter:
-            join = df_all[(df_all['alpha_g'] == ag) & (df_all['alpha_a'] == 2.0)]
-            sub_df = pd.concat([sub_df,join], axis=0)
-        prop = 'alpha_g'
+    properties = ["ass", "diameter", "short"]
     
-    for i in range(len(dimensions)):
-        
-        sub_dim = sub_df[sub_df['dim']==dimensions[i]]
-        
-        for aa in range(len(alpha_filter)):
-        
-            df_alpha = sub_dim[sub_dim[prop]==alpha_filter[aa]]
-            
-            logN = np.log10(pd.to_numeric(df_alpha['N']))
-            
-            parameters_short = linear_regression(logN, df_alpha['short_mean'], df_alpha['short_err'],Parameter=True)
-            parameters_ass_coeff = linear_regression(logN, df_alpha['ass_coeff_mean'], df_alpha['ass_coeff_err'],Parameter=True)
-            
-            dim_lst.append(dimensions[i])
-            #value_iloc = df.iloc[aa, df.columns.get_loc('B')]
-            alpha_a_lst.append(round(sub_dim['alpha_a'],2))
-            alpha_g_lst.append(2.0)
+    # Loop sobre cada dimensão e gera o gráfico correspondente
+    for dim_idx, dim in enumerate(dimensions):
+        for alpha in alpha_filter:
+            for j, prop_name in enumerate(properties):
+                # Inicializa listas de dados
+                N_aux = []
+                prop = []
+                prop_err = []
+                
+                for n in N:
+                    # Filtra o DataFrame para a dimensão, valor de N, alpha_g e alpha_a específicos
+                    df_dim = df[(df['dim'] == dim) & (df['N'] == n)]
+                    df_dim_alpha_a = df_dim[(df_dim["alpha_g"] == 2) & (df_dim["alpha_a"] == alpha)]
+                    
+                    if not df_dim_alpha_a.empty:  # Verifica se o filtro retornou dados
+                        N_aux.append(n)
+                        
+                        if prop_name == "ass":
+                            value = df_dim_alpha_a["ass_coeff_mean"].values[0]
+                            error = df_dim_alpha_a["ass_coeff_err"].values[0]
+                        elif prop_name == "diameter":
+                            value = df_dim_alpha_a["diameter_mean"].values[0]
+                            error = df_dim_alpha_a["diameter_err"].values[0]
+                        elif prop_name == "short":
+                            value = df_dim_alpha_a["short_mean"].values[0]
+                            error = df_dim_alpha_a["short_err"].values[0]
+                        
+                        prop.append(value)
+                        prop_err.append(error)
 
-            beta_short_lst.append(parameters_short[0])
-            beta_short_err_lst.append(parameters_short[2])
-            xi_short_lst.append(parameters_short[1])
-            xi_short_err_lst.append(parameters_short[3])
+                # Confere se as listas têm valores válidos antes da regressão
+                if len(N_aux) > 1 and len(prop) == len(N_aux):
+                    regression = linear_regression(np.log(N_aux), np.array(prop), np.array(prop_err), Parameter=True)
+                    coeff_all[f"A_{prop_name}"].append(regression[0])
+                    coeff_all[f"B_{prop_name}"].append(regression[1])
+                    coeff_all[f"A_{prop_name}_err"].append(regression[2])
+                    coeff_all[f"B_{prop_name}_err"].append(regression[3])
+                else:
+                    print(f"Dados insuficientes para regressão: dim={dim}, alpha={alpha}, prop={prop_name}")
+                    coeff_all[f"A_{prop_name}"].append(None)
+                    coeff_all[f"B_{prop_name}"].append(None)
+                    coeff_all[f"A_{prop_name}_err"].append(None)
+                    coeff_all[f"B_{prop_name}_err"].append(None)
 
-            beta_ass_coeff_lst.append(parameters_ass_coeff[0])
-            beta_ass_coeff_err_lst.append(parameters_ass_coeff[2])
-            xi_ass_coeff_lst.append(parameters_ass_coeff[1])
-            xi_ass_coeff_err_lst.append(parameters_ass_coeff[3])
+            coeff_all["alpha_a"].append(alpha)
+            coeff_all["dim"].append(dim)
+            coeff_all["alpha_g"].append(2)
 
-    beta_all = pd.DataFrame(data={"dim":dim_lst, "alpha_a":alpha_a_lst, "alpha_g":alpha_g_lst, "beta_short":beta_short_lst,"beta_short_err":beta_short_err_lst,
-                                "xi_short":xi_short_lst,"xi_short_err":xi_short_err_lst,"beta_ass_coeff":beta_ass_coeff_lst,"beta_ass_coeff_err":beta_ass_coeff_err_lst,
-                                "xi_ass_coeff":xi_ass_coeff_lst, "xi_ass_coeff_err":xi_ass_coeff_err_lst})
-    beta_all.to_csv("../../data/parameters_all.txt",sep=' ',index=False)
+    # Criar DataFrame final
+    df_coeff = pd.DataFrame(data=coeff_all)
+    df_coeff.to_csv("../coeff_linear.txt", sep=' ', index=False)
 
 def kappa(alpha_a,d):
     ration = alpha_a/d
