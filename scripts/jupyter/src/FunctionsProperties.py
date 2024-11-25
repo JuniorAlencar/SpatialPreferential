@@ -646,3 +646,56 @@ def fixing_data(N, dim, alpha_a, alpha_g):
 
         df = pd.read_csv(StringIO(cleaned_data), header=None, names=['#short_path', '#diameter', '#ass_coeff'])
         df.to_csv(filen, sep=',', index=False)
+
+
+def format_file(N, dim):
+    
+    for n in N:
+        for d in dim:        
+            all_combinations_ag =  extract_alpha_values(n, d)
+            for i in range(len(all_combinations_ag)):
+                filepath = f"../../data/N_{n}/dim_{d}/alpha_a_{all_combinations_ag[i][0]}_alpha_g_{all_combinations_ag[i][1]}/properties_set.txt"
+                print(n, d, all_combinations_ag[i][0], all_combinations_ag[i][1])
+                    # Verifica se file é realmente uma string (caminho do arquivo) e não um arquivo aberto
+                if not isinstance(filepath, str):
+                    raise TypeError("O argumento 'file' deve ser uma string representando o caminho do arquivo.")
+                
+                # Abre o arquivo para leitura
+                with open(filepath, 'r', encoding='utf-8') as file:
+                    lines = file.readlines()
+
+                formatted_lines = []
+                for line in lines:
+                    # Verifica se a linha já é separada por vírgulas
+                    if ',' in line:
+                        formatted_lines.append(line.strip())  # Remove espaços extras no final da linha
+                    else:
+                        # Substitui múltiplos espaços em branco por uma única vírgula
+                        formatted_line = ','.join(line.split())
+                        formatted_lines.append(formatted_line)
+                
+                # Escreve o conteúdo formatado de volta no arquivo
+                with open(filepath, 'w', encoding='utf-8') as file:
+                    file.write('\n'.join(formatted_lines))
+
+def remove_cod_file_column(N, dim, alpha_a, alpha_g):
+    file_path =  f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/properties_set.txt"
+    # Verifica se o arquivo existe
+    if not os.path.exists(file_path):
+        print(f"O arquivo {file_path} não existe.")
+        return
+    
+    # Carrega o arquivo CSV
+    df = pd.read_csv(file_path, delimiter=',')
+
+    # Verifica se a coluna '#cod_file' existe
+    if '#cod_file' in df.columns:
+        # Remove a coluna '#cod_file'
+        df = df.drop(columns=['#cod_file'])
+        # Salva o arquivo novamente, sem a coluna '#cod_file'
+        df.to_csv(file_path, index=False)
+        print(f"Coluna '#cod_file' removida do arquivo {file_path}.")
+    else:
+        # Caso a coluna não exista, não faz nada
+        print(f"A coluna '#cod_file' não existe no arquivo {file_path}. Nenhuma ação realizada.")
+        pass
