@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
     S.writeGML(gml_file);
     cout << prop_file << endl;
     ofstream pout(prop_file);
-    pout << "#mean shortest path," << "# diamater," << "#assortativity coefficient\r\n";
+    pout << "#short_path," << "#diamater," << "#ass_coeff\r\n";
     pout << l << "," << d << "," << r << endl;
     pout.close();
 

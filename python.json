@@ -1,0 +1,256 @@
+
+# ctrl + shift + p, search for Preferences: Open Users Settings(json)
+{
+    "editor.quickSuggestions": {
+        "other": true,
+        "comments": true,
+        "strings": true
+    },
+    "editor.suggestOnTriggerCharacters": true,
+}
+
+
+# ctrl + shift + p, search for snippets: Insert Snippet, select python e put the values above
+{
+    "Insert Alpha in Comments": {
+        "prefix": "\\alpha",
+        "body": ["α"],
+        "description": "Replace \\alpha with Greek letter alpha"
+    },
+    "Insert Alpha Uppercase in Comments": {
+        "prefix": "\\Alpha",
+        "body": ["Α"],
+        "description": "Replace \\Alpha with Greek letter Alpha"
+    },
+    "Insert Beta in Comments": {
+        "prefix": "\\beta",
+        "body": ["β"],
+        "description": "Replace \\beta with Greek letter beta"
+    },
+    "Insert Beta Uppercase in Comments": {
+        "prefix": "\\Beta",
+        "body": ["Β"],
+        "description": "Replace \\Beta with Greek letter Beta"
+    },
+    "Insert Gamma in Comments": {
+        "prefix": "\\gamma",
+        "body": ["γ"],
+        "description": "Replace \\gamma with Greek letter gamma"
+    },
+    "Insert Gamma Uppercase in Comments": {
+        "prefix": "\\Gamma",
+        "body": ["Γ"],
+        "description": "Replace \\Gamma with Greek letter Gamma"
+    },
+    "Insert Delta in Comments": {
+        "prefix": "\\delta",
+        "body": ["δ"],
+        "description": "Replace \\delta with Greek letter delta"
+    },
+    "Insert Delta Uppercase in Comments": {
+        "prefix": "\\Delta",
+        "body": ["Δ"],
+        "description": "Replace \\Delta with Greek letter Delta"
+    },
+    "Insert Epsilon in Comments": {
+        "prefix": "\\epsilon",
+        "body": ["ε"],
+        "description": "Replace \\epsilon with Greek letter epsilon"
+    },
+    "Insert Epsilon Uppercase in Comments": {
+        "prefix": "\\Epsilon",
+        "body": ["Ε"],
+        "description": "Replace \\Epsilon with Greek letter Epsilon"
+    },
+    "Insert Zeta in Comments": {
+        "prefix": "\\zeta",
+        "body": ["ζ"],
+        "description": "Replace \\zeta with Greek letter zeta"
+    },
+    "Insert Zeta Uppercase in Comments": {
+        "prefix": "\\Zeta",
+        "body": ["Ζ"],
+        "description": "Replace \\Zeta with Greek letter Zeta"
+    },
+    "Insert Eta in Comments": {
+        "prefix": "\\eta",
+        "body": ["η"],
+        "description": "Replace \\eta with Greek letter eta"
+    },
+    "Insert Eta Uppercase in Comments": {
+        "prefix": "\\Eta",
+        "body": ["Η"],
+        "description": "Replace \\Eta with Greek letter Eta"
+    },
+    "Insert Theta in Comments": {
+        "prefix": "\\theta",
+        "body": ["θ"],
+        "description": "Replace \\theta with Greek letter theta"
+    },
+    "Insert Theta Uppercase in Comments": {
+        "prefix": "\\Theta",
+        "body": ["Θ"],
+        "description": "Replace \\Theta with Greek letter Theta"
+    },
+    "Insert Iota in Comments": {
+        "prefix": "\\iota",
+        "body": ["ι"],
+        "description": "Replace \\iota with Greek letter iota"
+    },
+    "Insert Iota Uppercase in Comments": {
+        "prefix": "\\Iota",
+        "body": ["Ι"],
+        "description": "Replace \\Iota with Greek letter Iota"
+    },
+    "Insert Kappa in Comments": {
+        "prefix": "\\kappa",
+        "body": ["κ"],
+        "description": "Replace \\kappa with Greek letter kappa"
+    },
+    "Insert Kappa Uppercase in Comments": {
+        "prefix": "\\Kappa",
+        "body": ["Κ"],
+        "description": "Replace \\Kappa with Greek letter Kappa"
+    },
+    "Insert Lambda in Comments": {
+        "prefix": "\\lambda",
+        "body": ["λ"],
+        "description": "Replace \\lambda with Greek letter lambda"
+    },
+    "Insert Lambda Uppercase in Comments": {
+        "prefix": "\\Lambda",
+        "body": ["Λ"],
+        "description": "Replace \\Lambda with Greek letter Lambda"
+    },
+    "Insert Mu in Comments": {
+        "prefix": "\\mu",
+        "body": ["μ"],
+        "description": "Replace \\mu with Greek letter mu"
+    },
+    "Insert Mu Uppercase in Comments": {
+        "prefix": "\\Mu",
+        "body": ["Μ"],
+        "description": "Replace \\Mu with Greek letter Mu"
+    },
+    "Insert Nu in Comments": {
+        "prefix": "\\nu",
+        "body": ["ν"],
+        "description": "Replace \\nu with Greek letter nu"
+    },
+    "Insert Nu Uppercase in Comments": {
+        "prefix": "\\Nu",
+        "body": ["Ν"],
+        "description": "Replace \\Nu with Greek letter Nu"
+    },
+    "Insert Xi in Comments": {
+        "prefix": "\\xi",
+        "body": ["ξ"],
+        "description": "Replace \\xi with Greek letter xi"
+    },
+    "Insert Xi Uppercase in Comments": {
+        "prefix": "\\Xi",
+        "body": ["Ξ"],
+        "description": "Replace \\Xi with Greek letter Xi"
+    },
+    "Insert Omicron in Comments": {
+        "prefix": "\\omicron",
+        "body": ["ο"],
+        "description": "Replace \\omicron with Greek letter omicron"
+    },
+    "Insert Omicron Uppercase in Comments": {
+        "prefix": "\\Omicron",
+        "body": ["Ο"],
+        "description": "Replace \\Omicron with Greek letter Omicron"
+    },
+    "Insert Pi in Comments": {
+        "prefix": "\\pi",
+        "body": ["π"],
+        "description": "Replace \\pi with Greek letter pi"
+    },
+    "Insert Pi Uppercase in Comments": {
+        "prefix": "\\Pi",
+        "body": ["Π"],
+        "description": "Replace \\Pi with Greek letter Pi"
+    },
+    "Insert Rho in Comments": {
+        "prefix": "\\rho",
+        "body": ["ρ"],
+        "description": "Replace \\rho with Greek letter rho"
+    },
+    "Insert Rho Uppercase in Comments": {
+        "prefix": "\\Rho",
+        "body": ["Ρ"],
+        "description": "Replace \\Rho with Greek letter Rho"
+    },
+    "Insert Sigma in Comments": {
+        "prefix": "\\sigma",
+        "body": ["σ"],
+        "description": "Replace \\sigma with Greek letter sigma"
+    },
+    "Insert Sigma Uppercase in Comments": {
+        "prefix": "\\Sigma",
+        "body": ["Σ"],
+        "description": "Replace \\Sigma with Greek letter Sigma"
+    },
+    "Insert Tau in Comments": {
+        "prefix": "\\tau",
+        "body": ["τ"],
+        "description": "Replace \\tau with Greek letter tau"
+    },
+    "Insert Tau Uppercase in Comments": {
+        "prefix": "\\Tau",
+        "body": ["Τ"],
+        "description": "Replace \\Tau with Greek letter Tau"
+    },
+    "Insert Upsilon in Comments": {
+        "prefix": "\\upsilon",
+        "body": ["υ"],
+        "description": "Replace \\upsilon with Greek letter upsilon"
+    },
+    "Insert Upsilon Uppercase in Comments": {
+        "prefix": "\\Upsilon",
+        "body": ["Υ"],
+        "description": "Replace \\Upsilon with Greek letter Upsilon"
+    },
+    "Insert Phi in Comments": {
+        "prefix": "\\phi",
+        "body": ["φ"],
+        "description": "Replace \\phi with Greek letter phi"
+    },
+    "Insert Phi Uppercase in Comments": {
+        "prefix": "\\Phi",
+        "body": ["Φ"],
+        "description": "Replace \\Phi with Greek letter Phi"
+    },
+    "Insert Chi in Comments": {
+        "prefix": "\\chi",
+        "body": ["χ"],
+        "description": "Replace \\chi with Greek letter chi"
+    },
+    "Insert Chi Uppercase in Comments": {
+        "prefix": "\\Chi",
+        "body": ["Χ"],
+        "description": "Replace \\Chi with Greek letter Chi"
+    },
+    "Insert Psi in Comments": {
+        "prefix": "\\psi",
+        "body": ["ψ"],
+        "description": "Replace \\psi with Greek letter psi"
+    },
+    "Insert Psi Uppercase in Comments": {
+        "prefix": "\\Psi",
+        "body": ["Ψ"],
+        "description": "Replace \\Psi with Greek letter Psi"
+    },
+    "Insert Omega in Comments": {
+        "prefix": "\\omega",
+        "body": ["ω"],
+        "description": "Replace \\omega with Greek letter omega"
+    },
+    "Insert Omega Uppercase in Comments": {
+        "prefix": "\\Omega",
+        "body": ["Ω"],
+        "description": "Replace \\Omega with Greek letter Omega"
+    }
+}
+
