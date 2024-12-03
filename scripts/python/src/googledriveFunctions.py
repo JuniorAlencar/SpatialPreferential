@@ -30,6 +30,38 @@ def zip_gml_prop(folder_path, zip_filename):
                         zipf.write(file_path, os.path.relpath(file_path, folder_path))
                         pbar.update(1)
 
+def zip_files_excluding_gml_content(folder_path, zip_filename):
+    # Conta o total de arquivos que não estão em subdiretórios 'gml' ou são os arquivos excluídos
+    total_files = sum(
+        [
+            1
+            for root, dirs, files in os.walk(folder_path)
+            for file in files
+            if not (os.path.basename(root) == 'gml')  # Ignora conteúdo de subdiretórios 'gml'
+            or file in ['filenames.txt', 'properties_set.txt', 'time_process_seconds.txt']  # Sempre inclui esses
+        ]
+    )
+
+    # Cria o arquivo ZIP e inicia o processo de compactação
+    with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        with tqdm(total=total_files, desc="Compressão (excluindo conteúdo de gml)", unit="arquivo") as pbar:
+            for root, dirs, files in os.walk(folder_path):
+                # Ignora conteúdo de subdiretórios 'gml', mas mantém os arquivos listados
+                if os.path.basename(root) == 'gml':
+                    # Mantém arquivos específicos nos subdiretórios 'gml'
+                    for file in files:
+                        if file in ['filenames.txt', 'properties_set.txt', 'time_process_seconds.txt']:
+                            file_path = os.path.join(root, file)
+                            zipf.write(file_path, os.path.relpath(file_path, folder_path))
+                            pbar.update(1)
+                    continue
+
+                for file in files:
+                    # Compacta todos os outros arquivos fora dos subdiretórios 'gml'
+                    file_path = os.path.join(root, file)
+                    zipf.write(file_path, os.path.relpath(file_path, folder_path))
+                    pbar.update(1)
+
 # Função para extrair apenas o conteúdo da pasta "prop" com barra de progresso
 def extract_prop_from_zip(zip_filename, extract_dir):
     with zipfile.ZipFile(zip_filename, 'r') as zipf:

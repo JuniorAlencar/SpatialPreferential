@@ -165,9 +165,9 @@ def all_properties_file(N, dim, alpha_a, alpha_g):
     
     # Se o arquivo properties_set.txt existir, carregar o dataframe, caso contrário criar um novo
     if os.path.exists(properties_file):
-        df = pd.read_csv(properties_file, sep=' ')
+        df = pd.read_csv(properties_file, sep=',')
     else:
-        df = pd.DataFrame(columns=["#short_path", "#diamater", "#ass_coeff", "#cod_file"])
+        df = pd.DataFrame(columns=["#short_path", "#diamater", "#ass_coeff"])
     
     # Variável para rastrear se houve atualizações
     updated = False
@@ -201,7 +201,7 @@ def all_properties_file(N, dim, alpha_a, alpha_g):
         df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
         
         # Salvar o dataframe atualizado
-        df.to_csv(properties_file, sep=' ', index=False)
+        df.to_csv(properties_file, sep=',', index=False)
         
         # Atualizar o arquivo filenames.txt
         with open(filenames_file, 'w') as f:
@@ -282,7 +282,7 @@ def all_data(N, dim):
                 "ass_coeff_err":ass_coeff_err_lst, "ass_coeff_std":ass_coeff_std_lst}
     
     df_all = pd.DataFrame(data=data_all)
-    df_all.to_csv(f"../../data/all_data.txt",sep=' ',index=False)
+    df_all.to_csv(f"../../data/all_data.txt",sep=',',index=False)
 
 # Linear regression with errors in parameters
 def linear_regression(X,Y,Erro_Y,Parameter):

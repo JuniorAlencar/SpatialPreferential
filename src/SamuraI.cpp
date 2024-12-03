@@ -99,6 +99,7 @@ Navigation SamuraI::computeGlobalNavigation(){
     int dia = *max_element(d.begin(), d.end());
     double count = num_vertices(G)*(num_vertices(G)-1);
     meanShortestPath /= count;
+    
     BFS.shortestpath = meanShortestPath;
     BFS.diamater = dia;
     
