@@ -36,6 +36,8 @@ def multithread_pc(N,NumSamples):
     c = "run_code() {\n\t"
     d = f"time ../build/exe1 ../parms_pc_{N}/$1\n"
     e = "}\n"
+    e1 = """progress_bar() {\n \tlocal current=$1\n \tlocal total=$2\n \tlocal percent=$(( current * 100 / total))\n \tlocal filled=$(( percent * 50 / 100))\n \tlocal empty=$(( 50 - filled))\n"""
+    e2 = """\tprintf "\\r[%-${filled}s%${empty}s] %d%% (%d/%d)" "#" "" "$percent" "$current" "$total" \n}\n\n"""
     f = "# Exportar a função usando o módulo Parallel\n"
     g = "export -f run_code\n\n"
     
@@ -46,17 +48,18 @@ def multithread_pc(N,NumSamples):
     list_of_arguments = list_of_arguments.replace(',', '')
     
     h = f"arguments=(" 
-    i = list_of_arguments[1:-1] + ")\n"
+    i = list_of_arguments[1:-1] + ")\n\n"
     j = "x=0\n"
     k = f"n_samples={NumSamples}\n"
     l = f"while [ $x -le $n_samples ]\n"
     m = "do\n\t"
     n = "parallel run_code :::\t" +  """ "${arguments[@]}"  """ "\n\t"
     o = "x=$(( $x + 1))\n"
+    o1 = """\tprogress_bar "$x" "$n_samples"\n """
     p = "done"
 
     
-    list_for_loop = [a,b,c,d,e,g,h,i,j,k,l,m,n,o,p]
+    list_for_loop = [a,b,c,d,e,e1,e2,g,h,i,j,k,l,m,n,o,o1,p]
     l = open("../" + filename, "w") # argument w: write if don't exist file
 
     for k in list_for_loop:

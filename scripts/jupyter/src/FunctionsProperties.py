@@ -282,7 +282,7 @@ def all_data(N, dim):
                 "ass_coeff_err":ass_coeff_err_lst, "ass_coeff_std":ass_coeff_std_lst}
     
     df_all = pd.DataFrame(data=data_all)
-    df_all.to_csv(f"../../data/all_data.txt",sep=',',index=False)
+    df_all.to_csv(f"../../data/all_data.txt",sep=' ',index=False)
 
 # Linear regression with errors in parameters
 def linear_regression(X,Y,Erro_Y,Parameter):
