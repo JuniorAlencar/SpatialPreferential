@@ -14,6 +14,24 @@ import re
 
 from typing import Annotated
 
+def remove_outliers(N, dim, alpha_a, alpha_g):
+    files = f"../../data_2/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/properties_set.txt"
+    if(os.path.exists(files)):
+        df = pd.read_csv(files,delimiter=' ')        
+        R = df["#ass_coeff"]
+        q1 = R.quantile(0.25)
+        q3 = R.quantile(0.75)
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+
+        # Filtrar linhas que não são outliers
+        df = df[(R >= lower_bound) & (R <= upper_bound)]
+
+        # Salvar o DataFrame atualizado no mesmo arquivo
+        df.to_csv(files, sep=' ', index=False)
+        print(f"Outliers removidos e arquivo atualizado: {files}")
+
 # create folder to results
 def make_results_folders():
     path = "../../results"
@@ -42,25 +60,58 @@ def data_to_move():
     shutil.copy("../../data/all_data.txt", path)
     shutil.copy("../../data/coeff_linear.txt", path)
 
-# All combinations (alpha_a, alpha_g) folders
-def extract_alpha_values(N, dim):
-    # Define the directory path
-    folder_name = f'../../data/N_{N}/dim_{dim}/'
+# All combinations (N, dim, alpha_a, alpha_g) folders
+def extract_alpha_values(folder_data):
+    # Caminho inicial
+#    base_path = "../../data_2"
+    base_path = folder_data
 
-    # Define the pattern to match filenames
-    pattern = re.compile(r'alpha_a_(\d+(\.\d+)?)_alpha_g_(\d+(\.\d+)?)')
+    # Regex para capturar nvalue, dvalue, alpha_a (aavalue) e alpha_g (agvalue)
+    pattern = r"N_(\d+)/dim_(\d+)/alpha_a_([\d.]+)_alpha_g_([\d.]+)"
 
-    # Lists to store extracted combined values
-    combine_values = []
+    # Estrutura para armazenar as combinações encontradas
+    combinations = set()
 
-    # Iterate over files in the directory
-    for filename in os.listdir(folder_name):
-        match = pattern.search(filename)
+    # Percorrer todas as subpastas a partir de base_path
+    for root, dirs, files in os.walk(base_path):
+        match = re.search(pattern, root)
         if match:
-            combine_values.append([float(match.group(1)), float(match.group(3))])
+            nvalue = int(match.group(1))  # nvalue como inteiro
+            dvalue = int(match.group(2))  # dvalue como inteiro
+            aavalue = float(match.group(3))  # alpha_a como float
+            agvalue = float(match.group(4))  # alpha_g como float
+            combinations.add((nvalue, dvalue, aavalue, agvalue))
+    return combinations
 
-    return combine_values
+def update_headers(folder_data):
+    # Caminho inicial
+    base_path = folder_data
 
+    # Cabeçalhos
+    old_header = "#short_path,#diamater,#ass_coeff"
+    new_header = "#mean shortest path,# diamater,#assortativity coefficient"
+
+    # Percorrer todas as pastas e subpastas
+    for root, dirs, files in os.walk(base_path):
+        if 'prop' in root:  # Processar apenas as pastas 'prop'
+            for file_name in files:
+                if file_name.endswith(".csv"):  # Verificar apenas arquivos .csv
+                    file_path = os.path.join(root, file_name)
+                    
+                    # Ler e processar o arquivo
+                    with open(file_path, "r") as file:
+                        lines = file.readlines()
+                    
+                    # Verificar e substituir o cabeçalho, se necessário
+                    if lines and lines[0].strip() == old_header:
+                        print(f"Atualizando cabeçalho no arquivo: {file_path}")
+                        lines[0] = new_header + "\n"  # Substituir o cabeçalho
+                        
+                        # Escrever as alterações de volta no arquivo
+                        with open(file_path, "w") as file:
+                            file.writelines(lines)
+                    else:
+                        print(f"Nenhuma atualização necessária para o arquivo: {file_path}")
 
 # IMPORTANT! READ
 # the code as it is, deletes the samples from the computer after execution. if you don't want this to happen, 
@@ -165,7 +216,7 @@ def all_properties_file(N, dim, alpha_a, alpha_g):
     
     # Se o arquivo properties_set.txt existir, carregar o dataframe, caso contrário criar um novo
     if os.path.exists(properties_file):
-        df = pd.read_csv(properties_file, sep=',')
+        df = pd.read_csv(properties_file, sep=' ')
     else:
         df = pd.DataFrame(columns=["#short_path", "#diamater", "#ass_coeff"])
     
@@ -201,7 +252,7 @@ def all_properties_file(N, dim, alpha_a, alpha_g):
         df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
         
         # Salvar o dataframe atualizado
-        df.to_csv(properties_file, sep=',', index=False)
+        df.to_csv(properties_file, sep=' ', index=False)
         
         # Atualizar o arquivo filenames.txt
         with open(filenames_file, 'w') as f:
@@ -212,75 +263,79 @@ def all_properties_file(N, dim, alpha_a, alpha_g):
         print("Nenhuma atualização necessária. Todos os arquivos já estavam processados.")
 
 # Join all files in one dataframe
-def all_data(N, dim):
-    N_lst = []
-    dim_lst = []
-    alpha_a_lst = []
-    alpha_g_lst = []
-    N_samples_lst = []
-    short_lst = []
-    short_err_lst = []
-    short_std_lst = []
-    diameter_lst = []
-    diameter_err_lst = []
-    diameter_std_lst = []
-    ass_coeff_lst = []
-    ass_coeff_err_lst = []
-    ass_coeff_std_lst = []
+folder_data = "../../data"
 
-    #print(f"N={N}, dim = {dim}, alpha_a = {alpha_a}, alpha_g = {alpha_g}")
-    for n in N:
-        for d in dim:
-            
-            all_combinations_ag =  extract_alpha_values(n, d)
-            for i in range(len(all_combinations_ag)):
-                file = f"../../data/N_{n}/dim_{d}/alpha_a_{all_combinations_ag[i][0]}_alpha_g_{all_combinations_ag[i][1]}/properties_set.txt"
+N_lst = []
+dim_lst = []
+alpha_a_lst = []
+alpha_g_lst = []
+N_samples_lst = []
+short_lst = []
+short_err_lst = []
+short_std_lst = []
+diameter_lst = []
+diameter_err_lst = []
+diameter_std_lst = []
+ass_coeff_lst = []
+ass_coeff_err_lst = []
+ass_coeff_std_lst = []
+
+#print(f"N={N}, dim = {dim}, alpha_a = {alpha_a}, alpha_g = {alpha_g}")
+def all_data(folder_data):
+    all_combinations_ag =  extract_alpha_values(folder_data)
+    for parms in all_combinations_ag:
+        n = parms[0]
+        d = parms[1]
+        alpha_a = parms[2]
+        alpha_g = parms[3]
+        file = f"../../data/N_{parms[0]}/dim_{parms[1]}/alpha_a_{parms[2]}_alpha_g_{parms[3]}/properties_set.txt"
+        
+        #if file no exist, create it
+        if not os.path.isfile(file):
+            print("file not exist, running function all_properties")
+            all_properties_file(parms[0], parms[1], parms[2], parms[3])
+        
+        df = pd.read_csv(file, sep=' ')
+        
+        try:    
+            if(len(df)==0):
+                pass
+            else:
+                # Number of nodes
+                N_lst.append(n)
+                dim_lst.append(d)
                 
-                #if file no exist, create it
-                if not os.path.isfile(file):
-                    print("file not exist, running function all_properties")
-                    all_properties_file(n, d, all_combinations_ag[i][0], all_combinations_ag[i][1])
+                # Alpha_a and Alpha_g values
+                alpha_a_lst.append(alpha_a)
+                alpha_g_lst.append(alpha_g)
                 
-                try:
-                    df = pd.read_csv(file, sep=',')
-                    
-                    if(len(df)==0):
-                        pass
-                    else:
-                        # Number of nodes
-                        N_lst.append(n)
-                        dim_lst.append(d)
-                        
-                        # Alpha_a and Alpha_g values
-                        alpha_a_lst.append(all_combinations_ag[i][0])
-                        alpha_g_lst.append(all_combinations_ag[i][1])
-                        
-                        # Number of samples
-                        N_samples_lst.append(df['#short_path'].count())
-                        
-                        # Short_mean and Short_erro
-                        short_lst.append(df['#short_path'].mean())
-                        short_err_lst.append(df['#short_path'].sem())
-                        short_std_lst.append(df['#short_path'].std())
-                        
-                        # Diameter_mean and diameter erro
-                        diameter_lst.append(df[df.columns[1]].mean().tolist())
-                        diameter_err_lst.append(df[df.columns[1]].sem().tolist())
-                        diameter_std_lst.append(df[df.columns[1]].std().tolist())
-                        
-                        # Diameter_mean and diameter erro
-                        ass_coeff_lst.append(df['#ass_coeff'].mean())
-                        ass_coeff_err_lst.append(df['#ass_coeff'].sem())
-                        ass_coeff_std_lst.append(df['#ass_coeff'].std())
-                except:
-                    print("data not found")
+                # Number of samples
+                N_samples_lst.append(df['#short_path'].count())
+                
+                # Short_mean and Short_erro
+                short_lst.append(df['#short_path'].mean())
+                short_err_lst.append(df['#short_path'].sem())
+                short_std_lst.append(df['#short_path'].std())
+                
+                # Diameter_mean and diameter erro
+                diameter_lst.append(df[df.columns[1]].mean().tolist())
+                diameter_err_lst.append(df[df.columns[1]].sem().tolist())
+                diameter_std_lst.append(df[df.columns[1]].std().tolist())
+                
+                # Diameter_mean and diameter erro
+                ass_coeff_lst.append(df['#ass_coeff'].mean())
+                ass_coeff_err_lst.append(df['#ass_coeff'].sem())
+                ass_coeff_std_lst.append(df['#ass_coeff'].std())
+        except:
+            print(n, d, alpha_a, alpha_g)
+            print("data not found")
 
     data_all = {"N":N_lst, "dim":dim_lst, "alpha_a":alpha_a_lst, "alpha_g":alpha_g_lst, 
                 "N_samples":N_samples_lst, "short_mean":short_lst, "short_err":short_err_lst, 
                 "short_std":short_std_lst,"diameter_mean":diameter_lst, "diameter_err":diameter_err_lst, 
                 "diameter_std":diameter_std_lst, "ass_coeff_mean":ass_coeff_lst, 
                 "ass_coeff_err":ass_coeff_err_lst, "ass_coeff_std":ass_coeff_std_lst}
-    
+
     df_all = pd.DataFrame(data=data_all)
     df_all.to_csv(f"../../data/all_data.txt",sep=' ',index=False)
 

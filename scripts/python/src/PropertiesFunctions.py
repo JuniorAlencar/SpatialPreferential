@@ -64,6 +64,27 @@ def all_properties_dataframe(N,dim,alpha_a,alpha_g):
             i += 1
         df.to_csv(path_d+new_file,sep=' ',index=False)
 
+def extract_alpha_values(folder_data):
+    # Caminho inicial
+#    base_path = "../../data_2"
+    base_path = folder_data
+
+    # Regex para capturar nvalue, dvalue, alpha_a (aavalue) e alpha_g (agvalue)
+    pattern = r"N_(\d+)/dim_(\d+)/alpha_a_([\d.]+)_alpha_g_([\d.]+)"
+
+    # Estrutura para armazenar as combinações encontradas
+    combinations = set()
+
+    # Percorrer todas as subpastas a partir de base_path
+    for root, dirs, files in os.walk(base_path):
+        match = re.search(pattern, root)
+        if match:
+            nvalue = int(match.group(1))  # nvalue como inteiro
+            dvalue = int(match.group(2))  # dvalue como inteiro
+            aavalue = float(match.group(3))  # alpha_a como float
+            agvalue = float(match.group(4))  # alpha_g como float
+            combinations.add((nvalue, dvalue, aavalue, agvalue))
+    return combinations
 
 def all_properties_dataframe_2():
     base_dir = os.path.expanduser("../data")
@@ -189,7 +210,89 @@ def list_all_folders_for_alpha_fixed(N,dim,alpha_g_variable):
                 alpha_a_V.append(float(set_parms[i][0]))
         return alpha_a_V
 
-
+def all_properties_file(N, dim, alpha_a, alpha_g):
+    # Diretório onde os arquivos estão localizados
+    path_d = f"../../data_2/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/prop"
+    path_save = f"../../data_2/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}"
+    print(f"N = {N}, dim = {dim}, alpha_a = {alpha_a}, alpha_g = {alpha_g}")
+    
+    # Arquivos a serem atualizados
+    properties_file = os.path.join(path_save, "properties_set.txt")
+    filenames_file = os.path.join(path_save, "filenames.txt")
+    
+    # Verificar se o diretório 'prop' existe
+    if not os.path.exists(path_d):
+        print(f"O diretório {path_d} não existe. Nada a ser feito.")
+        return
+    
+    # Obter todos os arquivos CSV na pasta prop
+    all_files = glob.glob(os.path.join(path_d, "*.csv"))
+    
+    # Se não houver arquivos na pasta prop, nada é feito
+    if not all_files:
+        print(f"A pasta {path_d} está vazia. Nada a ser feito.")
+        return
+    
+    # Checar se o arquivo filenames.txt existe, caso contrário criar um
+    if os.path.exists(filenames_file):
+        with open(filenames_file, 'r') as f:
+            filenames_set = set(f.read().splitlines())  # Ler todos os arquivos já processados
+    else:
+        filenames_set = set()
+    
+    # Se o arquivo properties_set.txt existir, carregar o dataframe, caso contrário criar um novo
+    if os.path.exists(properties_file):
+        df = pd.read_csv(properties_file, sep=' ')
+    else:
+        df = pd.DataFrame(columns=["#short_path", "#diamater", "#ass_coeff"])
+    
+    # Variável para rastrear se houve atualizações
+    updated = False
+    new_rows = []  # Armazenar novas linhas para adicionar ao dataframe
+    
+    # Iterar sobre todos os arquivos CSV e verificar se já foram processados
+    #block 1
+    for file in all_files:
+        filename = os.path.basename(file)
+        
+        if os.path.getsize(file) == 0:
+            print(f"O arquivo {file} está vazio e será excluído.")
+            os.remove(file)
+            continue  # Pular para o próximo arquivo
+        
+        # Se o arquivo já foi processado, ignorar
+        if filename in filenames_set:
+            continue
+        
+        # Se o arquivo ainda não foi processado, ler os dados e adicionar ao DataFrame
+        new_data = pd.read_csv(file)
+        new_row = {
+            "#short_path": new_data["#mean shortest path"].values[0],
+            "#diamater": new_data["# diamater"].values[0],
+            "#ass_coeff": new_data["#assortativity coefficient"].values[0]
+        }
+        new_rows.append(new_row)
+        
+        # Adicionar o nome do arquivo ao conjunto de arquivos processados
+        filenames_set.add(filename)
+        updated = True  # Indicar que houve atualizações
+        #os.remove(file)  # Opcional: remover o arquivo após processamento
+        
+    # Se houver atualizações, salvar os arquivos atualizados
+    if updated:
+        # Adicionar as novas linhas ao dataframe
+        df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+        
+        # Salvar o dataframe atualizado
+        df.to_csv(properties_file, sep=' ', index=False)
+        
+        # Atualizar o arquivo filenames.txt
+        with open(filenames_file, 'w') as f:
+            f.write("\n".join(sorted(filenames_set)))  # Escrever os nomes dos arquivos processados
+        
+        print(f"Arquivos {properties_file} e {filenames_file} atualizados com sucesso.")
+    else:
+        print("Nenhuma atualização necessária. Todos os arquivos já estavam processados.")
 
 # Create datarframe with alpha_g fixed and alpha_a variable or the other way around (N fixed)
 def create_all_properties_file(N,dim,alpha_a,alpha_g,alpha_g_variable):

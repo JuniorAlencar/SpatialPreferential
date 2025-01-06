@@ -16,18 +16,20 @@ import pandas as pd
 #N: Number of nodes;
 #return: set of .json file with above parameters 
 
-
-N = 160000
-dim = 5
-alpha_a = [17.0, 18.0, 19.0, 20.0, 21.0, 22.0]
+N = 40000
+N_s = 100
+dim = [3,4,3,4]
+alpha_a = [8.0, 10.0, 9.0, 11.0]
 alpha_g = 2.0
-N_s = 20000
-df = pd.read_csv("run_multi.txt", delimiter=' ')
-df_n = df[df["N"]==N]
+for i in range(len(dim)):
+    FunctionsFile.JsonGenerate(N, alpha_a[i], alpha_g, dim[i])
+    #FunctionsFile.JsonGenerate(N, alpha_a[i], float(row["alpha_g"]), float(row["dim"]))        
+# df = pd.read_csv("run_multi.txt", delimiter=' ')
+# df_n = df[df["N"]==N]
 
-for _, row in df_n.iterrows():
-    FunctionsFile.JsonGenerate(int(row["N"]), float(row["alpha_a"]), float(row["alpha_g"]), float(row["dim"]))
-    FunctionsFile.JsonGenerate(int(row["N"]), float(row["alpha_a"]), float(row["alpha_g"]), float(row["dim"]))    
+# for _, row in df_n.iterrows():
+#     FunctionsFile.JsonGenerate(int(row["N"]), float(row["alpha_a"]), float(row["alpha_g"]), float(row["dim"]))
+#     FunctionsFile.JsonGenerate(int(row["N"]), float(row["alpha_a"]), float(row["alpha_g"]), float(row["dim"]))    
 # for i in range(len(N)):
 #     FunctionsFile.multithread_pc(N[i], N_samples[i])
 #     FunctionsFile.permission_run(N[i])
