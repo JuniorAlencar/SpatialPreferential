@@ -6,6 +6,7 @@ import glob
 import re
 import networkx as nx
 from decimal import Decimal, getcontext
+from pandas.errors import EmptyDataError
 
 # Return: dataframe with all samples
 def all_properties_dataframe(N,dim,alpha_a,alpha_g):
@@ -31,7 +32,9 @@ def all_properties_dataframe(N,dim,alpha_a,alpha_g):
         df = pd.read_csv(path_d+new_file,sep=" ")
         data = df.iloc[:,1:]
         #filter_list to check if files are in dataframe
-        filter_list = str(data["#cod_file"].values) 
+        df_names = pd.read_csv(f"{path_d}/filenames.txt")
+
+        filter_list = str(df_names["filename"].values) 
         num_samples = len(data)
         for file in all_files:
             # Check if file are in dataframe
@@ -42,17 +45,21 @@ def all_properties_dataframe(N,dim,alpha_a,alpha_g):
             # Add new elements in dataframe
             else:
                 new_data = pd.read_csv(file)
+                print(file)
                 df.loc[num_samples,"#short_path"] = new_data["#mean shortest path"].values[0]
                 df.loc[num_samples,"#diamater"] = new_data["# diamater"].values[0]
                 df.loc[num_samples,"#ass_coeff"] = new_data["#assortativity coefficient"].values[0]
-                df.loc[num_samples,"#cod_file"] = os.path.basename(file)[5:-4]
+                df_names.loc[num_samples,"filenames"] = os.path.basename(file)[5:-4]
                 num_samples += 1
+                
         # Save new dataframe update
         df.to_csv(path_d+new_file,sep=' ',index=False)
+        df_names.to_csv(path_d+"/filenames.txt",sep=' ',index=False)
 
     # Else, create it
     else:
-        df = pd.DataFrame(columns=["#short_path", "#diamater", "#ass_coeff", "#cod_file"])
+        df = pd.DataFrame(columns=["#short_path", "#diamater", "#ass_coeff"])
+        df_names = pd.DataFrame(columns="filename")
         i = 0
         # Open all files path in directory .csv
         for file in all_files:
@@ -60,9 +67,10 @@ def all_properties_dataframe(N,dim,alpha_a,alpha_g):
             df.loc[i,"#short_path"] = train["#mean shortest path"].values[0]
             df.loc[i,"#diamater"] = train["# diamater"].values[0]
             df.loc[i,"#ass_coeff"] = train["#assortativity coefficient"].values[0]
-            df.loc[i,"#cod_file"] = os.path.basename(file)[5:-4]
+            df_names.loc[i,"filename"] = os.path.basename(file)[5:-4]
             i += 1
         df.to_csv(path_d+new_file,sep=' ',index=False)
+        df_names.to_csv(path_d+"/filenames.txt",sep=' ',index=False)
 
 def extract_alpha_values(folder_data):
     # Caminho inicial
@@ -85,6 +93,57 @@ def extract_alpha_values(folder_data):
             agvalue = float(match.group(4))  # alpha_g como float
             combinations.add((nvalue, dvalue, aavalue, agvalue))
     return combinations
+
+def all_data(folder_data):
+    # Caminho inicial
+    #    base_path = "../../data_2"
+    base_path = folder_data
+
+    # Regex para capturar nvalue, dvalue, alpha_a (aavalue) e alpha_g (agvalue)
+    pattern = r"N_(\d+)/dim_(\d+)/alpha_a_([\d.]+)_alpha_g_([\d.]+)"
+
+    # Estrutura para armazenar as combinações encontradas
+    combinations = set()
+
+    all_data = {"N":[], "dim":[], "alpha_a":[], "alpha_g":[], "N_samples":[],
+                "short_mean":[], "short_err":[],"short_err_per":[],"diameter_mean":[],
+                "diameter_err":[],"diameter_err_per":[],"ass_coeff_mean":[],"ass_coeff_err":[],
+                "ass_coeff_err_per":[]}
+
+    # Percorrer todas as subpastas a partir de base_path
+    for root, dirs, files in os.walk(base_path):
+        match = re.search(pattern, root)
+        if match:
+            nvalue = int(match.group(1))  # nvalue como inteiro
+            dvalue = int(match.group(2))  # dvalue como inteiro
+            aavalue = float(match.group(3))  # alpha_a como float
+            agvalue = float(match.group(4))  # alpha_g como float
+            file = f"../../data/N_{nvalue}/dim_{dvalue}/alpha_a_{aavalue}_alpha_g_{agvalue}/properties_set.txt"
+            df = pd.read_csv(file, sep=' ')
+            
+            # add parameters to dictionary
+            all_data["N"].append(nvalue)
+            all_data["dim"].append(dvalue)
+            all_data["alpha_a"].append(aavalue)
+            all_data["alpha_g"].append(agvalue)
+            all_data["N_samples"].append(len(df))
+
+            # Add the statistical quantities
+            # short_path
+            all_data["short_mean"].append(df["#short_path"].mean())
+            all_data["short_err"].append(df["#short_path"].sem())
+            all_data["short_err_per"].append((df["#short_path"].sem() / df["#short_path"].mean())*100)
+            # diameter
+            all_data["diameter_mean"].append(df["#diamater"].mean())
+            all_data["diameter_err"].append(df["#diamater"].sem())
+            all_data["diameter_err_per"].append((df["#diamater"].sem() / df["#diamater"].mean())*100)
+            # ass_coeff
+            all_data["ass_coeff_mean"].append(df["#ass_coeff"].mean())
+            all_data["ass_coeff_err"].append(df["#ass_coeff"].sem())
+            all_data["ass_coeff_err_per"].append((df["#ass_coeff"].sem() / df["#ass_coeff"].mean())*100)
+
+    df_all = pd.DataFrame(data=all_data)
+    df_all.to_csv("../../data/all_data.txt", sep=' ', index=False, mode="w+")
 
 def all_properties_dataframe_2():
     base_dir = os.path.expanduser("../data")
@@ -210,10 +269,11 @@ def list_all_folders_for_alpha_fixed(N,dim,alpha_g_variable):
                 alpha_a_V.append(float(set_parms[i][0]))
         return alpha_a_V
 
+from pandas.errors import EmptyDataError
 def all_properties_file(N, dim, alpha_a, alpha_g):
     # Diretório onde os arquivos estão localizados
-    path_d = f"../../data_2/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/prop"
-    path_save = f"../../data_2/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}"
+    path_d = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/prop"
+    path_save = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}"
     print(f"N = {N}, dim = {dim}, alpha_a = {alpha_a}, alpha_g = {alpha_g}")
     
     # Arquivos a serem atualizados
@@ -253,31 +313,28 @@ def all_properties_file(N, dim, alpha_a, alpha_g):
     # Iterar sobre todos os arquivos CSV e verificar se já foram processados
     #block 1
     for file in all_files:
-        filename = os.path.basename(file)
-        
-        if os.path.getsize(file) == 0:
-            print(f"O arquivo {file} está vazio e será excluído.")
-            os.remove(file)
-            continue  # Pular para o próximo arquivo
-        
+        filename = os.path.basename(file)    
         # Se o arquivo já foi processado, ignorar
         if filename in filenames_set:
             continue
-        
-        # Se o arquivo ainda não foi processado, ler os dados e adicionar ao DataFrame
-        new_data = pd.read_csv(file)
-        new_row = {
-            "#short_path": new_data["#mean shortest path"].values[0],
-            "#diamater": new_data["# diamater"].values[0],
-            "#ass_coeff": new_data["#assortativity coefficient"].values[0]
-        }
-        new_rows.append(new_row)
-        
-        # Adicionar o nome do arquivo ao conjunto de arquivos processados
-        filenames_set.add(filename)
-        updated = True  # Indicar que houve atualizações
-        #os.remove(file)  # Opcional: remover o arquivo após processamento
-        
+        try:
+            print(file)
+            # Se o arquivo ainda não foi processado, ler os dados e adicionar ao DataFrame
+            new_data = pd.read_csv(file)
+            new_row = {
+                "#short_path": new_data["#mean shortest path"].values[0],
+                "#diamater": new_data["# diamater"].values[0],
+                "#ass_coeff": new_data["#assortativity coefficient"].values[0]
+            }
+            new_rows.append(new_row)
+            
+            # Adicionar o nome do arquivo ao conjunto de arquivos processados
+            filenames_set.add(filename)
+            updated = True  # Indicar que houve atualizações
+            #os.remove(file)  # Opcional: remover o arquivo após processamento
+        except EmptyDataError:
+            print("erro")
+            os.remove(file)
     # Se houver atualizações, salvar os arquivos atualizados
     if updated:
         # Adicionar as novas linhas ao dataframe
@@ -294,47 +351,6 @@ def all_properties_file(N, dim, alpha_a, alpha_g):
     else:
         print("Nenhuma atualização necessária. Todos os arquivos já estavam processados.")
 
-# Create datarframe with alpha_g fixed and alpha_a variable or the other way around (N fixed)
-def create_all_properties_file(N,dim,alpha_a,alpha_g,alpha_g_variable):
-    if(alpha_g_variable==True):
-        df_all = pd.DataFrame(columns=["#alpha_g","#short_mean","#diamater_mean","#ass_coeff_mean","#short_err","#diamater_err","#ass_coeff_err","#n_samples"])
-        j = 0
-
-        for i in alpha_g:
-            if(i==str(0.0)):
-                pass
-            else:
-                file = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{i}/properties_set.txt"
-                df = pd.read_csv(file, sep=' ')
-                df_all.loc[j,"#alpha_g"] = i
-                df_all.loc[j,"#short_mean"] = df["#short_path"].mean()
-                df_all.loc[j,"#diamater_mean"] = df["#diamater"].mean()
-                df_all.loc[j,"#ass_coeff_mean"] = df["#ass_coeff"].mean()
-                df_all.loc[j,"#short_err"] = df["#short_path"].sem()
-                df_all.loc[j,"#diamater_err"] = df["#diamater"].sem()
-                df_all.loc[j,"#ass_coeff_err"] = df["#ass_coeff"].sem()
-                df_all.loc[j,"#n_samples"] = len(df["#diamater"])
-
-            j += 1
-        df_all.to_csv(f"../../data/N_{N}/dim_{dim}/properties_all_alpha_a_{alpha_a}.txt",sep = ' ',index=False,mode="w")
-    else:       
-        df_all = pd.DataFrame(columns=["#alpha_a","#short_mean","#diamater_mean","#ass_coeff_mean","#short_err","#diamater_err","#ass_coeff_err","#n_samples"])
-        j = 0
-
-        for i in alpha_a:
-            file = f"../../data/N_{N}/dim_{dim}/alpha_a_{i}_alpha_g_{alpha_g}/properties_set.txt"
-            df = pd.read_csv(file, sep=' ')
-            df_all.loc[j,"#alpha_a"] = i
-            df_all.loc[j,"#short_mean"] = df["#short_path"].mean()
-            df_all.loc[j,"#diamater_mean"] = df["#diamater"].mean()
-            df_all.loc[j,"#ass_coeff_mean"] = df["#ass_coeff"].mean()
-            df_all.loc[j,"#short_err"] = df["#short_path"].sem()
-            df_all.loc[j,"#diamater_err"] = df["#diamater"].sem()
-            df_all.loc[j,"#ass_coeff_err"] = df["#ass_coeff"].sem()
-            df_all.loc[j,"#n_samples"] = len(df["#diamater"])
-
-            j += 1
-        df_all.to_csv(f"../../data/N_{N}/dim_{dim}/properties_all_alpha_g_{alpha_g}.txt",sep = ' ',index=False,mode="w")
 
 def list_N_folders():
     directory = f"../../data/"
