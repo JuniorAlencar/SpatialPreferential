@@ -16,10 +16,10 @@ import pandas as pd
 #N: Number of nodes;
 #return: set of .json file with above parameters 
 
-N = 40000
-N_s = 100
-dim = [3,4,3,4]
-alpha_a = [8.0, 10.0, 9.0, 11.0]
+N = 10**5
+N_s = 20
+dim = [1, 2, 3, 4]
+alpha_a = [1.0, 2.0, 3.0, 4.0, 5.0]
 alpha_g = 2.0
 for i in range(len(dim)):
     FunctionsFile.JsonGenerate(N, alpha_a[i], alpha_g, dim[i])

@@ -56,19 +56,6 @@ def list_all_folders(N,dim):
         set_parms.append(extract_alpha_values(lst_folders[i]))
 
     return set_parms
-    directory = f"../../data/N_{N}/dim_{dim}/"
-    lst_folders = []
-    for root, dirs, files in os.walk(directory):
-        lst_folders.append(dirs)
-    lst_folders = lst_folders[0]
-    set_parms = []
-    for i in range(len(lst_folders)):
-        term_ = len(lst_folders[i])
-        if(term_ == 23):
-            set_parms.append((lst_folders[i][8:11],lst_folders[i][20:]))
-        if(term_ == 24):
-            set_parms.append((lst_folders[i][8:12],lst_folders[i][21:]))
-    return set_parms
 
 def distribution(N, dim, alpha_a, alpha_g, degree, save):
     hist, bins_edge = np.histogram(degree, bins=np.arange(0.5,10**4+1.5,1), density=True)

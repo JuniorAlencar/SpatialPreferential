@@ -308,10 +308,10 @@ def all_data(folder_data):
             # ass_coeff
             all_data["ass_coeff_mean"].append(df["#ass_coeff"].mean())
             all_data["ass_coeff_err"].append(df["#ass_coeff"].sem())
-            all_data["ass_coeff_err_per"].append((df["#ass_coeff"].sem() / df["#ass_coeff"].mean())*100)
+            all_data["ass_coeff_err_per"].append(abs((df["#ass_coeff"].sem() / df["#ass_coeff"].mean())*100))
 
     df_all = pd.DataFrame(data=all_data)
-    df_all.to_csv("../../data/all_data.txt", sep=' ', index=False, mode="w+")
+    df_all.to_csv("../../data/all_data.txt", sep=' ', index=False)
 
 # Linear regression with errors in parameters
 def linear_regression(X,Y,Erro_Y,Parameter):
