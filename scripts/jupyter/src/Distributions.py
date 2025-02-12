@@ -14,6 +14,7 @@ from sklearn.linear_model import LinearRegression
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 from sklearn.model_selection import train_test_split
 import shutil
+from multiprocessing import Pool
 import math
 import re
 
@@ -117,32 +118,6 @@ def ln_q(k, pk, q, eta):
     P0 = 1/sum(k_values)
     return ((pk/P0)**(1-q)-1)/(1-q)
 
-def reader_degree_all(N, dim, alpha_a, alpha_g):
-    path_degree = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/all_files/degree_all.txt"
-    df = pd.read_csv(path_degree)
-    return df["degree"].values
-
-def deletar_pastas(caminho_pasta):
-    # Verifica se o caminho existe
-    if os.path.exists(caminho_pasta):
-        # Percorre todas as pastas e arquivos no caminho especificado
-        for item in os.listdir(caminho_pasta):
-            item_path = os.path.join(caminho_pasta, item)
-            
-            # Se for um diretório, chama a função recursivamente
-            if os.path.isdir(item_path):
-                shutil.rmtree(item_path)
-            # Se for um arquivo, exclui o arquivo
-            else:
-                os.remove(item_path)
-        
-        # Após excluir todos os itens, remove a pasta principal
-        shutil.rmtree(caminho_pasta)
-        print(f'A pasta {caminho_pasta} e seu conteúdo foram excluídos com sucesso.')
-    else:
-        print(f'O caminho {caminho_pasta} não existe.')
-
-
 def q(alpha_a,d):
     if(0 <= alpha_a/d <= 1):
         return 4/3
@@ -155,101 +130,113 @@ def kappa(alpha_a,d):
     else:
         return round(-1.15*np.exp(1-alpha_a/d)+1.45,4)
 
-def reset_gml_folder(N,dim,alpha_a,alpha_g):
-    path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/gml/check"
-    path_o = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/gml/"
-    
-    all_files = glob.glob(os.path.join(path, "*.gml.gz"))
-    
-    for file in all_files:
-        shutil.move(file, path_o + os.path.basename(file))
-
 def find_order_of_magnitude(number):
     order = int(math.floor(math.log10(abs(number))))
     return abs(order)    
 
-def all_degree_GML(N, dim, alpha_a, alpha_g):
-    path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}"
-    all_files = glob.glob(os.path.join(path + "/gml","*.gml.gz"))
+# ----------------------------
+# FUNCTION MOVED TO TOP LEVEL
+# ----------------------------
+def process_file(args):
+    """Process a single file, extract degree data, and delete the file."""
+    i, file, n_lines = args  # Unpack the arguments
+    degrees = np.zeros(n_lines, dtype=np.int32)  # Create a fixed array (avoids append)
 
-    if not os.path.exists(path + "/all_files"):
-        os.makedirs(path + "/all_files")
-    else:
-        pass
-
-    if(os.path.exists(path + "/all_files/degree_all.txt") == True):
-        print(f"N={N}, dim = {dim}, alpha_a = {alpha_a}, alpha_g = {alpha_g}")
-        file_data = pd.read_csv(path+"/all_files/file_name_all.txt", sep=" ")
-        # Create new dictionary aux to update (if necessary)
-        file_names = {"files": [] }
-        degrees = []
-        
+    with gzip.open(file, 'rt') as gzip_file:
         count = 0
-        degrees_dict = defaultdict(list)
-        
-        for file in all_files:
-            file_name = os.path.basename(file)
-        
-            # Check if file was used
-            cond = file_name in file_data["files"].values    
-            
-            # If the file is dataframe, pass
-            if(cond == True):
-                pass
-            # Else update
-            elif(cond == False):
-                print("not update")
-                
-                file_names["files"].append(os.path.basename(file))
-                degrees_dict = defaultdict(list)
-                
+        for line in gzip_file:
+            if line.startswith("degree "):  # Faster than strip() and [:6]
+                degrees[count] = int(line[7:])  # Extract degree and store in the array
+                count += 1
+                if count == n_lines:  # Avoid unnecessary processing
+                    break
 
-                with open(file, 'rb') as file_in:
-                    # decompress gzip
-                    with gzip.GzipFile(fileobj=file_in, mode='rb') as gzip_file:
-                        for line in gzip_file:
-                            # decode file
-                            line = line.decode('utf-8')
-                            if(line[:6]=="degree"):
-                                degrees.append(int(line[7:]))
-                count += 1        
-        
-            degrees_dict['degree'].extend(degrees)
-        
-        if(count != 0):
-            degree_data = pd.read_csv("degree.txt", sep=" ")
-            
-            degree_data = pd.concat([degree_data, pd.DataFrame(degrees_dict)], ignore_index=True)
-            file_data = pd.concat([file_data, pd.DataFrame(data=file_names)], ignore_index=True)
-            
-            degree_data.to_csv(path + "/all_files/degree_all.txt", sep = ' ', index=False, mode="w+")
-            file_data.to_csv(path + "/all_files/file_name_all.txt", sep = ' ',  index=False, mode="w+")        
-        clear_output()  # Set wait=True if you want to clear the output without scrolling the notebook
-        
-    elif(os.path.exists(path + "/all_files/degree_all.txt") == False):
-        print(f"N={N}, dim = {dim}, alpha_a = {alpha_a}, alpha_g = {alpha_g}")
-        
-        file_names = { "files": [] }
-        degrees = []
-        num_files = 1
-        
-        for file in all_files: 
-            file_names["files"].append(os.path.basename(file))
-            
-            with open(file, 'rb') as file_in:
-                # decompress gzip
-                with gzip.GzipFile(fileobj=file_in, mode='rb') as gzip_file:
-                    for line in gzip_file:
-                        # decode file
-                        line = line.decode('utf-8')
-                        if(line[:6]=="degree"):
-                            degrees.append(int(line[7:]))
-            print(f"N_files = {len(all_files)}, {len(all_files)-num_files} remaning")
-            num_files += 1
-            
-        file_df = pd.DataFrame(data=file_names)
-        degree_df = pd.DataFrame(data={"degree":degrees})
-        
-        degree_df.to_csv(path + "/all_files/degree_all.txt", sep = ' ', index=False,mode='w+')
-        file_df.to_csv(path + "/all_files/file_name_all.txt", sep = ' ', index=False,mode='w+')
-        clear_output()  # Set wait=True if you want to clear the output without scrolling the notebook
+    # Delete the processed file
+    os.remove(file)
+    return i, degrees, os.path.basename(file)
+
+# ----------------------------
+# MAIN FUNCTION
+# ----------------------------
+def degree_file(N, dim, alpha_a, alpha_g):
+    """Process degree files and store the results in a .npy file."""
+    # Define file paths
+    path_folder = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/gml"
+    degree_file_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/degree.npy"
+    filenames_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/filenames_degree.csv"
+    print(f"Processing to N = {N}, dim = {dim}, alpha_a = {alpha_a}, alpha_g = {alpha_g}")
+    # List all .gml.gz files in the directory
+    all_files = sorted(glob.glob(os.path.join(path_folder, "*.gml.gz")))  # Sort for consistency
+    
+    if not all_files:
+        print(f"⚠️ Warning: The folder {path_folder} is empty. Skipping processing.")
+        return  # Exit function without doing anything
+    
+    all_filenames = [os.path.basename(file) for file in all_files]
+
+    # Number of rows per file
+    n_lines = N  
+
+    # Check if degree.npy already exists
+    if os.path.exists(degree_file_path) and os.path.exists(filenames_path):
+        # Load the list of already processed files
+        existing_filenames = pd.read_csv(filenames_path, header=None).squeeze().tolist()
+
+        # Identify new files that have not been processed yet
+        new_files = [file for file in all_files if os.path.basename(file) not in existing_filenames]
+
+        if not new_files:
+            print("All files have already been processed. No updates needed.")
+            return
+        else:
+            print(f"Found {len(new_files)} new files. Updating degree.npy...")
+
+            # Load existing data
+            existing_data = np.load(degree_file_path)
+
+            # Create a matrix for new files
+            n_new_files = len(new_files)
+            new_data = np.zeros((n_lines, n_new_files), dtype=np.int32)
+
+            # Process new files in parallel (pass n_lines as argument)
+            with Pool() as pool:
+                results = pool.map(process_file, [(i, file, n_lines) for i, file in enumerate(new_files)])
+
+            # Insert new results into `new_data`
+            for i, degrees, filename in results:
+                new_data[:, i] = degrees
+                existing_filenames.append(filename)  # Add to the processed file list
+
+            # Concatenate new data with the existing dataset
+            updated_data = np.hstack((existing_data, new_data))
+
+            # Save the updated dataset
+            np.save(degree_file_path, updated_data)
+
+            # Update `filenames.csv`
+            pd.DataFrame(existing_filenames).to_csv(filenames_path, index=False, header=False)
+
+            print(f"Update completed! {len(new_files)} new files were processed and deleted.")
+
+    else:
+        print("Degree files not found. Processing all files from scratch...")
+
+        # Create a matrix to store all data
+        n_files = len(all_files)
+        data = np.zeros((n_lines, n_files), dtype=np.int32)
+
+        # Process all files in parallel (pass n_lines as argument)
+        with Pool() as pool:
+            results = pool.map(process_file, [(i, file, n_lines) for i, file in enumerate(all_files)])
+
+        # Insert results into `data`
+        filenames = []
+        for i, degrees, filename in results:
+            data[:, i] = degrees
+            filenames.append(filename)  # Add file name to the list
+
+        # Save dataset and file names
+        np.save(degree_file_path, data)
+        pd.DataFrame(filenames).to_csv(filenames_path, index=False, header=False)
+
+        print(f"Processing completed! {n_files} files were processed, saved, and deleted.")

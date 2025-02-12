@@ -17,12 +17,19 @@ import pandas as pd
 #return: set of .json file with above parameters 
 
 N = 10**5
-N_s = 20
-dim = [1, 2, 3, 4]
-alpha_a = [1.0, 2.0, 3.0, 4.0, 5.0]
-alpha_g = 2.0
-for i in range(len(dim)):
-    FunctionsFile.JsonGenerate(N, alpha_a[i], alpha_g, dim[i])
+N_s = 800
+dim = [1,2,3,4]
+alpha_a_f = 2.0
+alpha_g_v = [1.0, 2.0, 3.0, 3.0, 4.0, 5.0]
+
+alpha_a_v = [0.0, 1.0, 2.0, 3.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+alpha_g_f = 2.0
+for d in dim:
+    for aa in alpha_a_v:
+        FunctionsFile.JsonGenerate(N, aa, alpha_g_f, d)
+    for ag in alpha_g_v:
+        FunctionsFile.JsonGenerate(N, alpha_a_f, ag, d)
+    
     #FunctionsFile.JsonGenerate(N, alpha_a[i], float(row["alpha_g"]), float(row["dim"]))        
 # df = pd.read_csv("run_multi.txt", delimiter=' ')
 # df_n = df[df["N"]==N]

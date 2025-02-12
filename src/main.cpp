@@ -55,9 +55,9 @@ int main(int argc, char* argv[]) {
     samargs xargs = read_parametes(argv[1]);
 
     // set filenames
-    char n_folder[50], alpha_folder[80], gml_folder[100], prop_folder[100], prop_file[250], gml_file[250], time_process_file[250];
+    char n_folder[50], alpha_folder[160], gml_folder[170], prop_folder[170], prop_file[200], gml_file[200], time_process_file[200];
     sprintf(n_folder, "./N_%d", xargs.num_vertices);    
-    sprintf(alpha_folder, "%s/dim_%d/alpha_a_%1.1f_alpha_g_%1.1f", n_folder, xargs.dim, xargs.alpha_a, xargs.alpha_g);
+    sprintf(alpha_folder, "%s/dim_%d/alpha_a_%1.2f_alpha_g_%1.2f", n_folder, xargs.dim, xargs.alpha_a, xargs.alpha_g);
     sprintf(gml_folder, "%s/gml", alpha_folder);
     sprintf(prop_folder, "%s/prop", alpha_folder);
     sprintf(prop_file, "%s/prop_%d.csv", prop_folder, xargs.seed);
@@ -71,20 +71,20 @@ int main(int argc, char* argv[]) {
 
     SamuraI S(xargs);
     S.createGraph();
-    double l = S.computeGlobalNavigation().shortestpath;
-    int d = S.computeGlobalNavigation().diamater;
+    //double l = S.computeGlobalNavigation().shortestpath;
+    //int d = S.computeGlobalNavigation().diamater;
     
-    double r = S.computeAssortativityCoefficient();
+    //double r = S.computeAssortativityCoefficient();
 	//S.writeConnections(connections_file);
     //S.writeDegrees(degree_file);
     S.writeGML(gml_file);
-    cout << prop_file << endl;
-    ofstream pout(prop_file);
-    pout << "#mean_shortest_path," << "# diamater," << "#assortativity coefficient\r\n";
-    pout << l << "," << d << "," << r << endl;
-    pout.close();
+    // cout << prop_file << endl;
+    // ofstream pout(prop_file);
+    // pout << "#mean_shortest_path," << "# diamater," << "#assortativity coefficient\r\n";
+    // pout << l << "," << d << "," << r << endl;
+    // pout.close();
 
-    S.clear();
+    // S.clear();
     
     cout << time_process_file << endl;
     // Gen file to calculate time to run process
