@@ -17,18 +17,14 @@ import pandas as pd
 #return: set of .json file with above parameters 
 
 N = 10**5
-N_s = 800
+N_s = 50
 dim = [1,2,3,4]
-alpha_a_f = 2.0
-alpha_g_v = [1.0, 2.0, 3.0, 3.0, 4.0, 5.0]
+alpha_a = 2.0
+alpha_g = np.linspace(1.00, 5.00, 20)
 
-alpha_a_v = [0.0, 1.0, 2.0, 3.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
-alpha_g_f = 2.0
-for d in dim:
-    for aa in alpha_a_v:
-        FunctionsFile.JsonGenerate(N, aa, alpha_g_f, d)
-    for ag in alpha_g_v:
-        FunctionsFile.JsonGenerate(N, alpha_a_f, ag, d)
+for i in range(len(alpha_g)):
+    for d in dim:
+        FunctionsFile.JsonGenerate(N, alpha_a, alpha_g[i], d)
     
     #FunctionsFile.JsonGenerate(N, alpha_a[i], float(row["alpha_g"]), float(row["dim"]))        
 # df = pd.read_csv("run_multi.txt", delimiter=' ')

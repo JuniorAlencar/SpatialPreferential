@@ -15,7 +15,7 @@ import re
 from typing import Annotated
 
 def remove_outliers(N, dim, alpha_a, alpha_g):
-    files = f"../../data_2/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/properties_set.txt"
+    files = f"../../data_2/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/properties_set.txt"
     if(os.path.exists(files)):
         df = pd.read_csv(files,delimiter=' ')        
         R = df["#ass_coeff"]
@@ -67,7 +67,7 @@ def extract_alpha_values(folder_data):
     base_path = folder_data
 
     # Regex para capturar nvalue, dvalue, alpha_a (aavalue) e alpha_g (agvalue)
-    pattern = r"N_(\d+)/dim_(\d+)/alpha_a_([\d.]+)_alpha_g_([\d.]+)"
+    pattern = r"N_(\d+)/dim_(\d+)/alpha_a_([\d]+\.\d{2})_alpha_g_([\d]+\.\d{2})"
 
     # Estrutura para armazenar as combinações encontradas
     combinations = set()
@@ -80,7 +80,7 @@ def extract_alpha_values(folder_data):
             dvalue = int(match.group(2))  # dvalue como inteiro
             aavalue = float(match.group(3))  # alpha_a como float
             agvalue = float(match.group(4))  # alpha_g como float
-            combinations.add((nvalue, dvalue, aavalue, agvalue))
+            combinations.add((nvalue, dvalue, round(aavalue, 2), round(agvalue, 2)))
     return combinations
 
 def update_headers(folder_data):
@@ -187,9 +187,10 @@ def update_headers(folder_data):
 #         print("Nenhuma atualização necessária. Todos os arquivos já estavam processados.")
 def all_properties_file(N, dim, alpha_a, alpha_g):
     # Diretório onde os arquivos estão localizados
-    path_d = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/prop"
-    path_save = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}"
-    print(f"N = {N}, dim = {dim}, alpha_a = {alpha_a}, alpha_g = {alpha_g}")
+    path_d = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/prop"
+    path_save = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}"
+    print(f"N = {N}, dim = {dim}, alpha_a = {alpha_a:.2f}, alpha_g = {alpha_g:.2f}")
+    
     # Arquivos a serem atualizados
     properties_file = os.path.join(path_save, "properties_set.txt")
     filenames_file = os.path.join(path_save, "filenames.txt")
@@ -202,9 +203,12 @@ def all_properties_file(N, dim, alpha_a, alpha_g):
     # Obter todos os arquivos CSV na pasta prop
     all_files = glob.glob(os.path.join(path_d, "*.csv"))
     
+    # Remover arquivos vazios
+    all_files = [file for file in all_files if os.path.getsize(file) > 0]
+    
     # Se não houver arquivos na pasta prop, nada é feito
     if not all_files:
-        print(f"A pasta {path_d} está vazia. Nada a ser feito.")
+        print(f"A pasta {path_d} está vazia ou contém apenas arquivos vazios. Nada a ser feito.")
         return
     
     # Checar se o arquivo filenames.txt existe, caso contrário criar um
@@ -230,10 +234,18 @@ def all_properties_file(N, dim, alpha_a, alpha_g):
         
         # Se o arquivo já foi processado, ignorar
         if filename in filenames_set:
+            os.remove(file)  # Opcional: remover o arquivo após processamento
             continue
         
         # Se o arquivo ainda não foi processado, ler os dados e adicionar ao DataFrame
-        new_data = pd.read_csv(file)
+        new_data = pd.read_csv(file, sep=',')
+        
+        if new_data.empty:
+            os.remove(file)  # Deletar arquivo vazio
+            print(f"Arquivo vazio {filename} foi deletado.")
+            continue
+        
+        
         new_row = {
             "#short_path": new_data["#mean shortest path"].values[0],
             "#diamater": new_data["# diamater"].values[0],
@@ -268,7 +280,7 @@ def all_data(folder_data):
     base_path = folder_data
 
     # Regex para capturar nvalue, dvalue, alpha_a (aavalue) e alpha_g (agvalue)
-    pattern = r"N_(\d+)/dim_(\d+)/alpha_a_([\d.]+)_alpha_g_([\d.]+)"
+    pattern = r"N_(\d+)/dim_(\d+)/alpha_a_([\d]+\.\d{2})_alpha_g_([\d]+\.\d{2})"
 
     # Estrutura para armazenar as combinações encontradas
     combinations = set()
@@ -286,14 +298,15 @@ def all_data(folder_data):
             dvalue = int(match.group(2))  # dvalue como inteiro
             aavalue = float(match.group(3))  # alpha_a como float
             agvalue = float(match.group(4))  # alpha_g como float
-            file = f"../../data/N_{nvalue}/dim_{dvalue}/alpha_a_{aavalue}_alpha_g_{agvalue}/properties_set.txt"
+            file = f"../../data/N_{nvalue}/dim_{dvalue}/alpha_a_{aavalue:.2f}_alpha_g_{agvalue:.2f}/properties_set.txt"
+            print(f"N = {nvalue}, dim = {dvalue}, alpha_a = {aavalue:.2f}, alpha_g = {agvalue:.2f}")
             df = pd.read_csv(file, sep=' ')
             
             # add parameters to dictionary
             all_data["N"].append(nvalue)
             all_data["dim"].append(dvalue)
-            all_data["alpha_a"].append(aavalue)
-            all_data["alpha_g"].append(agvalue)
+            all_data["alpha_a"].append(round(aavalue, 2))
+            all_data["alpha_g"].append(round(agvalue, 2))
             all_data["N_samples"].append(len(df))
 
             # Add the statistical quantities
@@ -362,7 +375,7 @@ def parameters_calculate(df: pd.DataFrame, N: list, dimensions: list, alpha_filt
                 for n in N:
                     # Filtra o DataFrame para a dimensão, valor de N, alpha_g e alpha_a específicos
                     df_dim = df[(df['dim'] == dim) & (df['N'] == n)]
-                    df_dim_alpha_a = df_dim[(df_dim["alpha_g"] == 2) & (df_dim["alpha_a"] == alpha)]
+                    df_dim_alpha_a = df_dim[(df_dim["alpha_g"] == 2.00) & (df_dim["alpha_a"] == round(alpha, 2))]
                     
                     if not df_dim_alpha_a.empty:  # Verifica se o filtro retornou dados
                         N_aux.append(n)
@@ -554,7 +567,7 @@ def q(alpha_a,d):
 #             df.to_csv(path_d+new_file,sep=' ',index=False)
 
 
-def filter_N_properties(alpha_filter,properties):
+def filter_N_properties(alpha_filter, properties):
     # All index where alpha_a in all_alpha_a dataframe
     all_alpha_a = [properties.iloc[i,0] in alpha_filter for i in range(len(properties))]
     # Select index with alpha_a values
@@ -569,7 +582,7 @@ def filter_N_properties(alpha_filter,properties):
         err_properties_path.append(properties.iloc[index[j]][8:].values)
     return N_values, properties_values, err_properties_path
 
-def filter_N_linear_regression(alpha_filter,properties):
+def filter_N_linear_regression(alpha_filter, properties):
     # All index where alpha_a in all_alpha_a dataframe
     all_alpha_a = [properties.iloc[i,0] in alpha_filter for i in range(len(properties))]
     # Select index with alpha_a values
@@ -601,8 +614,8 @@ def create_all_surface(N,dim,alpha_a,alpha_g,alpha_g_variable):
             if(i==str(0.0)):
                 pass
             else:
-                df = pd.read_csv(f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}alpha_g{i}/prop/properties_set.txt", sep=' ')
-                mean_values["#alpha_g"].append(i)
+                df = pd.read_csv(f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}alpha_g{i:.2f}/prop/properties_set.txt", sep=' ')
+                mean_values["#alpha_g"].append(round(i, 2))
                 
                 mean_values["#short_mean"].append(df["#short_path"].mean())
                 mean_values["#diamater_mean"].append(df["#diamater"].mean())
@@ -616,7 +629,7 @@ def create_all_surface(N,dim,alpha_a,alpha_g,alpha_g_variable):
         
         df_all = pd.DataFrame(data=mean_values)
         sorted_df = df_all.sort_values(by='#alpha_g', key=lambda col: col.astype(float))  # Sort by converting to float
-        sorted_df.to_csv(path + f"/all_alpha_a_{alpha_a}.txt", sep = ' ', index = False, mode="w+")
+        sorted_df.to_csv(path + f"/all_alpha_a_{alpha_a:.2f}.txt", sep = ' ', index = False, mode="w+")
         
     else:       
         mean_values = {"#alpha_a":[],"#short_mean":[],"#diamater_mean":[],
@@ -624,8 +637,8 @@ def create_all_surface(N,dim,alpha_a,alpha_g,alpha_g_variable):
                 "#ass_coeff_err":[],"#n_samples":[]}
 
         for i in alpha_a:
-            df = pd.read_csv(f"../../data/N_{N}/dim_{dim}/alpha_a_{i}alpha_g{alpha_g}/prop/properties_set.txt", sep=' ')
-            mean_values["#alpha_a"].append(i)
+            df = pd.read_csv(f"../../data/N_{N}/dim_{dim}/alpha_a_{i:.2f}alpha_g{alpha_g:.2f}/prop/properties_set.txt", sep=' ')
+            mean_values["#alpha_a"].append(round(i, 2))
             
             mean_values["#short_mean"].append(df["#short_path"].mean())
             mean_values["#diamater_mean"].append(df["#diamater"].mean())
@@ -639,10 +652,10 @@ def create_all_surface(N,dim,alpha_a,alpha_g,alpha_g_variable):
         
         df_all = pd.DataFrame(data=mean_values)
         sorted_df = df_all.sort_values(by='#alpha_a', key=lambda col: col.astype(float))  # Sort by converting to float
-        sorted_df.to_csv(path + f"/all_alpha_g_{alpha_g}.txt", sep = ' ', index=False, mode="w+")
+        sorted_df.to_csv(path + f"/all_alpha_g_{alpha_g:.2f}.txt", sep = ' ', index=False, mode="w+")
 
 def fixing_data(N, dim, alpha_a, alpha_g):
-    filen = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/properties_set.txt"
+    filen = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/properties_set.txt"
 
     # Lendo o conteúdo do arquivo
     with open(filen, "r") as file:
@@ -678,13 +691,12 @@ def fixing_data(N, dim, alpha_a, alpha_g):
 
 
 def format_file(N, dim):
-    
     for n in N:
         for d in dim:        
             all_combinations_ag =  extract_alpha_values(n, d)
             for i in range(len(all_combinations_ag)):
-                filepath = f"../../data/N_{n}/dim_{d}/alpha_a_{all_combinations_ag[i][0]}_alpha_g_{all_combinations_ag[i][1]}/properties_set.txt"
-                print(n, d, all_combinations_ag[i][0], all_combinations_ag[i][1])
+                filepath = f"../../data/N_{n}/dim_{d}/alpha_a_{all_combinations_ag[i][0]:.2f}_alpha_g_{all_combinations_ag[i][1]:.2f}/properties_set.txt"
+                print(n, d, round(all_combinations_ag[i][0], 2), round(all_combinations_ag[i][1], 2))
                     # Verifica se file é realmente uma string (caminho do arquivo) e não um arquivo aberto
                 if not isinstance(filepath, str):
                     raise TypeError("O argumento 'file' deve ser uma string representando o caminho do arquivo.")
@@ -708,7 +720,7 @@ def format_file(N, dim):
                     file.write('\n'.join(formatted_lines))
 
 def remove_cod_file_column(N, dim, alpha_a, alpha_g):
-    file_path =  f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/properties_set.txt"
+    file_path =  f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/properties_set.txt"
     # Verifica se o arquivo existe
     if not os.path.exists(file_path):
         print(f"O arquivo {file_path} não existe.")

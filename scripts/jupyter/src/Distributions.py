@@ -3,240 +3,379 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os  
 import glob
-from collections import Counter
-from collections import OrderedDict
-from collections import defaultdict
-from IPython.display import clear_output
 import gzip
-from collections import defaultdict
-from scipy import stats
-from sklearn.linear_model import LinearRegression
-from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
-from sklearn.model_selection import train_test_split
-import shutil
 from multiprocessing import Pool
-import math
-import re
+from scipy.optimize import curve_fit
+from scipy.stats import kstest
+from scipy.integrate import quad
 
+# N: number of nodes
+# d: dimension
+# alpha_a:.2f: parameter for preferential attrachment
+# alpha_g:.2f: parameter for probability of distances nodes
 
-# create folder to results
-def make_results_folders():
-    path = "../../results"
-    # If file in all_files, create check_folder to move files
-    if not os.path.exists(path):
-        os.makedirs(path)
-        os.makedirs(path+"/alpha_a")
-        os.makedirs(path+"/alpha_g")
-        os.makedirs(path+"/N")
-        os.makedirs(path+"/distributions")
-        os.makedirs(path+"/network")
+def process_file(index_file_tuple):
+    """Processa um único arquivo para extrair os graus dos nós."""
+    i, file = index_file_tuple
+    n_lines = 10**5  # Número fixo de linhas por arquivo
+    degrees = np.zeros(n_lines, dtype=np.int32)  # Criar array fixo (evita append)
+    
+    with gzip.open(file, 'rt') as gzip_file:  # 'rt' já faz a decodificação
+        count = 0
+        for line in gzip_file:
+            if line.startswith("degree "):  # Mais rápido que strip() e [:6]
+                degrees[count] = int(line[7:])  # Extrai grau e adiciona no array
+                count += 1
+                if count == n_lines:  # Para evitar processamento extra
+                    break
+    
+    return i, degrees, os.path.basename(file)
+
+def degree_file(N, dim, alpha_a, alpha_g):
+    """Processa múltiplos arquivos .gml.gz e salva os graus extraídos."""
+    # Pasta com os arquivos
+    path_folder = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/gml"
+    output_dir = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}"
+    
+    # Criar diretório de saída se não existir
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Listar todos os arquivos .gml.gz
+    all_files = sorted(glob.glob(os.path.join(path_folder, "*.gml.gz")))  # Ordenação para consistência
+
+    # Verificar se a pasta está vazia
+    if not all_files:
+        print("Folder empty")
+        return
+
+    n_files = len(all_files)  # Número total de arquivos
+    n_lines = 10**5           # Número de linhas por arquivo
+
+    # Caminhos dos arquivos de saída
+    degree_npy_path = os.path.join(output_dir, "degree.npy")
+    filenames_csv_path = os.path.join(output_dir, "filenames_degree.csv")
+
+    # Verificar se já existem dados processados
+    if os.path.exists(filenames_csv_path):
+        df_existing = pd.read_csv(filenames_csv_path)
+        processed_files = set(df_existing["filenames"].tolist())
     else:
-        pass
+        df_existing = pd.DataFrame(columns=["filenames"])
+        processed_files = set()
 
-# Open the folder string name and return (alpha_a_value, alpha_g_value)
-def extract_alpha_values(folder_name):
-    pattern = r"alpha_a_(-?\d+\.\d+)_alpha_g_(-?\d+\.\d+)"
-    match = re.match(pattern, folder_name)
-    if match:
-        alpha_a = float(match.group(1))
-        alpha_g = float(match.group(2))
-        return (alpha_a, alpha_g)
+    # Filtrar arquivos que ainda não foram processados
+    new_files = [file for file in all_files if os.path.basename(file) not in processed_files]
+
+    if not new_files:
+        print("Todos os arquivos já foram processados. Nada a fazer.")
+        return
+
+    print(f"Processando {len(new_files)} novos arquivos...")
+
+    # Processar apenas os arquivos novos em paralelo
+    with Pool() as pool:
+        results = pool.map(process_file, enumerate(new_files))
+
+    # Organizar os novos resultados
+    new_filenames = []
+    new_data = np.empty((n_lines, len(results)), dtype=np.int32)
+
+    for i, (idx, degrees, filename) in enumerate(results):
+        new_data[:, i] = degrees
+        new_filenames.append(filename)
+
+    # Se degree.npy já existe, carregar e adicionar os novos dados
+    if os.path.exists(degree_npy_path):
+        existing_data = np.load(degree_npy_path)
+        updated_data = np.hstack((existing_data, new_data))
     else:
-        return None, None
+        updated_data = new_data
 
-# List all pair of (alpha_a,alpha_g) folders in (N,dim) folder
-def list_all_folders(N,dim):
-    directory = f"../../data/N_{N}/dim_{dim}/"
-    lst_folders = []
-    for root, dirs, files in os.walk(directory):
-        lst_folders.append(dirs)
-    lst_folders = lst_folders[0]
-    set_parms = []
+    # Atualizar e salvar degree.npy
+    np.save(degree_npy_path, updated_data)
 
-    for i in range(len(lst_folders)):
-        set_parms.append(extract_alpha_values(lst_folders[i]))
+    # Atualizar e salvar filenames_degree.csv
+    df_new = pd.DataFrame({"filenames": new_filenames})
+    df_updated = pd.concat([df_existing, df_new], ignore_index=True)
+    df_updated.to_csv(filenames_csv_path, index=False)
 
-    return set_parms
+    print(f"Processamento concluído. Dados salvos em {output_dir}")
 
-def distribution(N, dim, alpha_a, alpha_g, degree, save):
-    hist, bins_edge = np.histogram(degree, bins=np.arange(0.5,10**4+1.5,1), density=True)
+
+def distribution(degree, save=False, **kwargs):
+    """
+    Calcula a distribuição de graus P(k) e remove valores nulos.
     
-    P = hist*np.diff(bins_edge)             # distribution = density*deltaK
-    K = bins_edge[:-1]+bins_edge[:1]
-    index_remove = []                       # load index with distribution zero
+    Args:
+        degree (array-like): Lista de graus.
+        save (bool): Se True, salva os dados.
+        **kwargs: Argumentos adicionais (N, dim, alpha_a, alpha_g) para salvar os dados.
+
+    Returns:
+        k_real (array): Valores de k após remoção de bins vazios.
+        p_real (array): Distribuição normalizada de P(k).
+    """
     
-    for idk,elements in enumerate(P):
-        if(elements==0):
-            index_remove.append(idk) 
-    # Removing elements in k_mean and distribution with distribution = 0 (empty box)
-    p_real = np.delete(P,index_remove)      
-    k_real = np.delete(K,index_remove)
+    hist, bins_edge = np.histogram(degree, bins=np.arange(0.5, 10**4 + 1.5, 1), density=True)
+    P = hist * np.diff(bins_edge)  # P(k) = densidade * delta k
+    K = bins_edge[:-1]  # Usamos o início dos bins como k representativo
     
-    if(save == True):
-        # Save distribution (or update)
-        distri_dataframe = pd.DataFrame(data={"k":k_real,"pk":p_real})
-        distri_dataframe['pk'] = distri_dataframe['pk'].apply(lambda x: format(x, '.2e'))
-        distri_dataframe.to_csv(f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/all_files/distri_linear_all.csv",mode="w",index=False)
-        return k_real,p_real
-    else:
-        return k_real,p_real
-    
+    # Remover bins vazios (onde P(k) == 0)
+    valid = P > 0
+    k_real = K[valid]
+    p_real = P[valid]
+
+    # Normalização para garantir que ∑P(k) = 1
+    P_sum = np.sum(p_real)
+    if P_sum > 0:
+        p_real /= P_sum
+
+    # Remover NaNs ou infinitos
+    valid_values = np.isfinite(k_real) & np.isfinite(p_real)
+    k_real = k_real[valid_values]
+    p_real = p_real[valid_values]
+
+    # Se save=True, salvar os dados
+    if save:
+        required_keys = ["N", "dim", "alpha_a", "alpha_g"]
+        if not all(arg in kwargs for arg in required_keys):
+            raise ValueError(f"Se save=True, os argumentos {required_keys} devem ser fornecidos.")
+
+        # Obtém os valores das variáveis
+        N, dim, alpha_a, alpha_g, propertie = kwargs["N"], kwargs["dim"], kwargs["alpha_a"], kwargs["alpha_g"], kwargs["propertie"]
+
+        # Define o caminho do arquivo
+        save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/{propertie}_distribution_linear.csv"
+
+        # Salva os dados
+        df = pd.DataFrame(data={"k": k_real, "pk": p_real})
+        df.to_csv(save_path, sep=' ', index=False)
+        print(f"Arquivo salvo em {save_path}")
+
+    return k_real, p_real
+
+# distribution: distribution (N_k/N)
+# return(p_cum): cumulative distribution
+
+def cumulative_distribution(distribution):
+    p_cum = np.zeros(len(distribution))
+    p_cum[0] = sum(distribution)
+    for i in range(1,len(distribution)):
+        p_cum[i] = p_cum[i-1] - distribution[i]
+    return p_cum
+
+# Logbinnig_test
 
 def drop_zeros(a_list):
-    return [i for i in a_list if i>0]
+    """Remove valores zero da lista."""
+    return [i for i in a_list if i > 0]
 
-def log_binning(N, dim, alpha_a, alpha_g, counter_dict, bin_count, save):
-
-    max_x = np.log10(max(list(counter_dict.keys())))
-    max_y = np.log10(max(list(counter_dict.values())))
-    max_base = max([max_x,max_y])
-
-    min_x = np.log10(min(drop_zeros(list(counter_dict.keys()))))
-
-    bins = np.logspace(min_x,max_base,num=bin_count)
-
-    # Based off of: http://stackoverflow.com/questions/6163334/binning-data-in-python-with-scipy-numpy
-    Pk = (np.histogram(list(counter_dict.keys()),bins,weights=list(counter_dict.values()), density = True)[0] / np.histogram(list(counter_dict.keys()),bins)[0])*np.diff(bins)
-    k = (np.histogram(list(counter_dict.keys()),bins,weights=list(counter_dict.keys()))[0] / np.histogram(list(counter_dict.keys()),bins)[0])
-
-    k = [x for x in k if str(x) != 'nan']
-    Pk = [x for x in Pk if str(x) != 'nan']
+def log_binning(counter_dict, bin_count, save=False, **kwargs):
+    """Realiza binagem logarítmica e normaliza P(k). Se save=True, salva os dados."""
     
-    if(save==True):
-        distri_dataframe = pd.DataFrame(data={"k":k,"pk":Pk})
-        distri_dataframe['pk'] = distri_dataframe['pk'].apply(lambda x: format(x, '.2e'))
-        distri_dataframe.to_csv(f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/all_files/distri_log_all.csv",mode="w",index=False)
-        return k,Pk
+    keys = np.array(list(counter_dict.keys()), dtype=np.float64)
+    values = np.array(list(counter_dict.values()), dtype=np.float64)
+
+    # Definir os limites dos bins logarítmicos
+    min_x = np.log10(min(drop_zeros(keys)))
+    max_x = np.log10(max(keys))
+
+    bins = np.logspace(min_x, max_x, num=bin_count)
+
+    # Calcular os histogramas
+    hist_counts, bin_edges = np.histogram(keys, bins=bins, weights=values, density=False)
+    bin_counts, _ = np.histogram(keys, bins=bins)
+
+    # Evitar divisões por zero
+    valid_bins = bin_counts > 0
+    Pk = np.zeros_like(hist_counts, dtype=np.float64)
+    k = np.zeros_like(hist_counts, dtype=np.float64)
+
+    # Calcular P(k) e k médio para cada bin válido
+    Pk[valid_bins] = hist_counts[valid_bins] / bin_counts[valid_bins]
+    k[valid_bins] = np.histogram(keys, bins=bins, weights=keys)[0][valid_bins] / bin_counts[valid_bins]
+
+    # Normalização de P(k) para garantir que ∑P(k) = 1
+    Pk_sum = np.sum(Pk)
+    if Pk_sum > 0:
+        Pk /= Pk_sum
+
+    # Remover valores NaN ou infinitos
+    valid_values = np.isfinite(k) & np.isfinite(Pk)
+    k = k[valid_values]
+    Pk = Pk[valid_values]
+
+    # Salvar se save=True
+    if save:
+        # Verifica se os argumentos necessários foram passados
+        required_keys = ["N", "dim", "alpha_a", "alpha_g"]
+        if not all(arg in kwargs for arg in required_keys):
+            raise ValueError(f"Se save=True, os argumentos {required_keys} devem ser fornecidos.")
+
+        # Obtém os valores das variáveis
+        N = kwargs["N"]
+        dim = kwargs["dim"]
+        alpha_a = kwargs["alpha_a"]
+        alpha_g = kwargs["alpha_g"]
+        propertie = kwargs["propertie"]
+
+        # Define o caminho do arquivo
+        save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/{propertie}_distribution_log.csv"
+
+        # Salva os dados
+        if(propertie=="degree"):
+            df = pd.DataFrame(data={"k": k, "pk": Pk})
+        elif(propertie=="distances"):
+            df = pd.DataFrame(data={"ds": k, "pds": Pk})
+        df.to_csv(save_path, sep=' ', index=False)
+        print(f"Arquivo salvo em {save_path}")
+
+    return k, Pk
+
+def q(alpha_a,d):
+    ration = alpha_a/d
+    if(0<=ration<=1):
+        return 4/3
     else:
-        return k,Pk
+        return (1/3)*np.exp(1-ration)+1
 
-    
+def eta(alpha_a,d):
+    ration = alpha_a/d
+    if(0<=ration<=1):
+        return 0.3
+    else:
+        return -1.15*np.exp(1-ration) + 1.45
+
 def ln_q(k, pk, q, eta):
     k_values = np.zeros(len(k))
     for i in range(len(k)):
-        k_values[i] = (1-(1-q)*(k[i]/eta))**(1/(1-q))
-    P0 = 1/sum(k_values)
+        k_values[i] = (1+(q-1)*(k/eta))**(1/(1-q))
+    P0 = sum(k_values)
     return ((pk/P0)**(1-q)-1)/(1-q)
 
-def q(alpha_a,d):
-    if(0 <= alpha_a/d <= 1):
-        return 4/3
-    else:
-        return round((1/3)*np.exp(1-alpha_a/d)+1.0,4)
-
-def kappa(alpha_a,d):
-    if(0 <= alpha_a/d <= 1):
-        return 0.3
-    else:
-        return round(-1.15*np.exp(1-alpha_a/d)+1.45,4)
-
-def find_order_of_magnitude(number):
-    order = int(math.floor(math.log10(abs(number))))
-    return abs(order)    
-
-# ----------------------------
-# FUNCTION MOVED TO TOP LEVEL
-# ----------------------------
-def process_file(args):
-    """Process a single file, extract degree data, and delete the file."""
-    i, file, n_lines = args  # Unpack the arguments
-    degrees = np.zeros(n_lines, dtype=np.int32)  # Create a fixed array (avoids append)
-
-    with gzip.open(file, 'rt') as gzip_file:
+def process_distance_file(index_file_tuple):
+    """Processa um único arquivo para extrair as distâncias."""
+    i, file = index_file_tuple
+    n_lines = 10**5  # Número fixo de linhas por arquivo
+    distances = np.zeros(n_lines, dtype=np.float32)  # Criar array fixo para evitar append
+    
+    with gzip.open(file, 'rt') as gzip_file:  # 'rt' já faz a decodificação
         count = 0
         for line in gzip_file:
-            if line.startswith("degree "):  # Faster than strip() and [:6]
-                degrees[count] = int(line[7:])  # Extract degree and store in the array
+            if line.startswith("distance "):  # Mais rápido que strip() e [:9]
+                distances[count] = float(line[9:])  # Extrai distância e adiciona no array
                 count += 1
-                if count == n_lines:  # Avoid unnecessary processing
+                if count == n_lines:  # Para evitar processamento extra
                     break
-
-    # Delete the processed file
-    os.remove(file)
-    return i, degrees, os.path.basename(file)
-
-# ----------------------------
-# MAIN FUNCTION
-# ----------------------------
-def degree_file(N, dim, alpha_a, alpha_g):
-    """Process degree files and store the results in a .npy file."""
-    # Define file paths
-    path_folder = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/gml"
-    degree_file_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/degree.npy"
-    filenames_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/filenames_degree.csv"
-    print(f"Processing to N = {N}, dim = {dim}, alpha_a = {alpha_a}, alpha_g = {alpha_g}")
-    # List all .gml.gz files in the directory
-    all_files = sorted(glob.glob(os.path.join(path_folder, "*.gml.gz")))  # Sort for consistency
     
+    return i, distances, os.path.basename(file)
+
+def distance_file(N, dim, alpha_a, alpha_g):
+    """Processa múltiplos arquivos .gml.gz e salva as distâncias extraídas."""
+    # Pasta com os arquivos
+    path_folder = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/gml"
+    output_dir = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}"
+    
+    # Criar diretório de saída se não existir
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Listar todos os arquivos .gml.gz
+    all_files = sorted(glob.glob(os.path.join(path_folder, "*.gml.gz")))  # Ordenação para consistência
+
+    # Verificar se a pasta está vazia
     if not all_files:
-        print(f"⚠️ Warning: The folder {path_folder} is empty. Skipping processing.")
-        return  # Exit function without doing anything
-    
-    all_filenames = [os.path.basename(file) for file in all_files]
+        print("Folder empty")
+        return
 
-    # Number of rows per file
-    n_lines = N  
+    n_files = len(all_files)  # Número total de arquivos
+    n_lines = 10**5           # Número de linhas por arquivo
 
-    # Check if degree.npy already exists
-    if os.path.exists(degree_file_path) and os.path.exists(filenames_path):
-        # Load the list of already processed files
-        existing_filenames = pd.read_csv(filenames_path, header=None).squeeze().tolist()
+    # Caminhos dos arquivos de saída
+    distances_npy_path = os.path.join(output_dir, "distances.npy")
+    filenames_csv_path = os.path.join(output_dir, "filenames_distances.csv")
 
-        # Identify new files that have not been processed yet
-        new_files = [file for file in all_files if os.path.basename(file) not in existing_filenames]
-
-        if not new_files:
-            print("All files have already been processed. No updates needed.")
-            return
-        else:
-            print(f"Found {len(new_files)} new files. Updating degree.npy...")
-
-            # Load existing data
-            existing_data = np.load(degree_file_path)
-
-            # Create a matrix for new files
-            n_new_files = len(new_files)
-            new_data = np.zeros((n_lines, n_new_files), dtype=np.int32)
-
-            # Process new files in parallel (pass n_lines as argument)
-            with Pool() as pool:
-                results = pool.map(process_file, [(i, file, n_lines) for i, file in enumerate(new_files)])
-
-            # Insert new results into `new_data`
-            for i, degrees, filename in results:
-                new_data[:, i] = degrees
-                existing_filenames.append(filename)  # Add to the processed file list
-
-            # Concatenate new data with the existing dataset
-            updated_data = np.hstack((existing_data, new_data))
-
-            # Save the updated dataset
-            np.save(degree_file_path, updated_data)
-
-            # Update `filenames.csv`
-            pd.DataFrame(existing_filenames).to_csv(filenames_path, index=False, header=False)
-
-            print(f"Update completed! {len(new_files)} new files were processed and deleted.")
-
+    # Verificar se já existem dados processados
+    if os.path.exists(filenames_csv_path):
+        df_existing = pd.read_csv(filenames_csv_path)
+        processed_files = set(df_existing["filenames"].tolist())
     else:
-        print("Degree files not found. Processing all files from scratch...")
+        df_existing = pd.DataFrame(columns=["filenames"])
+        processed_files = set()
 
-        # Create a matrix to store all data
-        n_files = len(all_files)
-        data = np.zeros((n_lines, n_files), dtype=np.int32)
+    # Filtrar arquivos que ainda não foram processados
+    new_files = [file for file in all_files if os.path.basename(file) not in processed_files]
 
-        # Process all files in parallel (pass n_lines as argument)
-        with Pool() as pool:
-            results = pool.map(process_file, [(i, file, n_lines) for i, file in enumerate(all_files)])
+    if not new_files:
+        print("Todos os arquivos já foram processados. Nada a fazer.")
+        return
 
-        # Insert results into `data`
-        filenames = []
-        for i, degrees, filename in results:
-            data[:, i] = degrees
-            filenames.append(filename)  # Add file name to the list
+    print(f"Processando {len(new_files)} novos arquivos...")
 
-        # Save dataset and file names
-        np.save(degree_file_path, data)
-        pd.DataFrame(filenames).to_csv(filenames_path, index=False, header=False)
+    # Processar apenas os arquivos novos em paralelo
+    with Pool() as pool:
+        results = pool.map(process_distance_file, enumerate(new_files))
 
-        print(f"Processing completed! {n_files} files were processed, saved, and deleted.")
+    # Organizar os novos resultados
+    new_filenames = []
+    new_data = np.empty((n_lines, len(results)), dtype=np.float32)
+
+    for i, (idx, distances, filename) in enumerate(results):
+        new_data[:, i] = distances
+        new_filenames.append(filename)
+
+    # Se distances.npy já existe, carregar e adicionar os novos dados
+    if os.path.exists(distances_npy_path):
+        existing_data = np.load(distances_npy_path)
+        updated_data = np.hstack((existing_data, new_data))
+    else:
+        updated_data = new_data
+
+    # Atualizar e salvar distances.npy
+    np.save(distances_npy_path, updated_data)
+
+    # Atualizar e salvar filenames_distances.csv
+    df_new = pd.DataFrame({"filenames": new_filenames})
+    df_updated = pd.concat([df_existing, df_new], ignore_index=True)
+    df_updated.to_csv(filenames_csv_path, index=False)
+
+    print(f"Processamento concluído. Dados salvos em {output_dir}")
+
+
+def optimize_q_exp(k, pk, q_initial=1.333, b_initial=0.40, delta_q=0.01, delta_b=0.01):
+    """
+    Otimiza os parâmetros q e b do ajuste q-exponencial dentro de uma faixa restrita.
+    
+    Parâmetros:
+        k (array): Valores de k.
+        pk (array): Valores de P(k).
+        q_initial (float): Valor inicial de q baseado na relação teórica.
+        b_initial (float): Valor inicial de b baseado na relação teórica.
+        delta_q (float): Intervalo de variação permitido para q.
+        delta_b (float): Intervalo de variação permitido para b.
+
+    Retorna:
+        fitted_q (float): Melhor valor ajustado de q.
+        fitted_b (float): Melhor valor ajustado de b.
+    """
+    # Definir a função q-exponencial com normalização segura
+    def normalized_constant_safe(q, b, k_vals):
+        try:
+            integral, _ = quad(lambda x: (1 - (1 - q) * (x / b)) ** (1 / (1 - q)), np.min(k_vals), np.max(k_vals))
+            return 1 / integral if integral > 0 else 1
+        except:
+            return 1
+
+    def q_exp_safe(x, q, b):
+        A = normalized_constant_safe(q, b, k)
+        return A * (1 - (1 - q) * (x / b)) ** (1 / (1 - q))
+
+    # Ajustar corretamente os limites para garantir valores bem definidos
+    bounds_ultra_fine = ([q_initial - delta_q, b_initial - delta_b], [q_initial + delta_q, b_initial + delta_b])
+
+    # Ajuste ultra fino dentro dessa faixa extremamente reduzida
+    popt_ultra_fine, _ = curve_fit(q_exp_safe, k, pk, p0=[q_initial, b_initial], bounds=bounds_ultra_fine)
+
+    # Parâmetros finais ajustados
+    fitted_q, fitted_b = popt_ultra_fine
+
+    return fitted_q, fitted_b
