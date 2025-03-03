@@ -16,15 +16,14 @@ import pandas as pd
 #N: Number of nodes;
 #return: set of .json file with above parameters 
 
-N = 10**5
-N_s = 50
-dim = [1,2,3,4]
-alpha_a = 2.0
-alpha_g = np.linspace(1.00, 5.00, 20)
+N = 20000
+N_s = 1600
+dim = 4
+alpha_a = [2.25, 2.75]
+alpha_g = 2.0
 
-for i in range(len(alpha_g)):
-    for d in dim:
-        FunctionsFile.JsonGenerate(N, alpha_a, alpha_g[i], d)
+for aa in alpha_a:
+    FunctionsFile.JsonGenerate(N, aa, alpha_g, dim)
     
     #FunctionsFile.JsonGenerate(N, alpha_a[i], float(row["alpha_g"]), float(row["dim"]))        
 # df = pd.read_csv("run_multi.txt", delimiter=' ')

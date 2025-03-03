@@ -274,57 +274,78 @@ def all_properties_file(N, dim, alpha_a, alpha_g):
     else:
         print("Nenhuma atualização necessária. Todos os arquivos já estavam processados.")
 
+import os
+import re
+import pandas as pd
+
+import os
+import re
+import pandas as pd
+import shutil  # Importado para remover diretórios com conteúdo
+
 def all_data(folder_data):
     # Caminho inicial
-    #    base_path = "../../data_2"
     base_path = folder_data
 
     # Regex para capturar nvalue, dvalue, alpha_a (aavalue) e alpha_g (agvalue)
     pattern = r"N_(\d+)/dim_(\d+)/alpha_a_([\d]+\.\d{2})_alpha_g_([\d]+\.\d{2})"
 
-    # Estrutura para armazenar as combinações encontradas
-    combinations = set()
-
-    all_data = {"N":[], "dim":[], "alpha_a":[], "alpha_g":[], "N_samples":[],
-                "short_mean":[], "short_err":[],"short_err_per":[],"diameter_mean":[],
-                "diameter_err":[],"diameter_err_per":[],"ass_coeff_mean":[],"ass_coeff_err":[],
-                "ass_coeff_err_per":[]}
+    # Estrutura para armazenar os dados
+    all_data = {
+        "N": [], "dim": [], "alpha_a": [], "alpha_g": [], "N_samples": [],
+        "short_mean": [], "short_err": [], "short_err_per": [],
+        "diameter_mean": [], "diameter_err": [], "diameter_err_per": [],
+        "ass_coeff_mean": [], "ass_coeff_err": [], "ass_coeff_err_per": []
+    }
 
     # Percorrer todas as subpastas a partir de base_path
-    for root, dirs, files in os.walk(base_path):
+    for root, dirs, files in os.walk(base_path, topdown=False):  # Processa de baixo para cima
         match = re.search(pattern, root)
         if match:
             nvalue = int(match.group(1))  # nvalue como inteiro
             dvalue = int(match.group(2))  # dvalue como inteiro
             aavalue = float(match.group(3))  # alpha_a como float
             agvalue = float(match.group(4))  # alpha_g como float
-            file = f"../../data/N_{nvalue}/dim_{dvalue}/alpha_a_{aavalue:.2f}_alpha_g_{agvalue:.2f}/properties_set.txt"
-            print(f"N = {nvalue}, dim = {dvalue}, alpha_a = {aavalue:.2f}, alpha_g = {agvalue:.2f}")
-            df = pd.read_csv(file, sep=' ')
             
-            # add parameters to dictionary
-            all_data["N"].append(nvalue)
-            all_data["dim"].append(dvalue)
-            all_data["alpha_a"].append(round(aavalue, 2))
-            all_data["alpha_g"].append(round(agvalue, 2))
-            all_data["N_samples"].append(len(df))
+            # Caminhos relevantes
+            properties_file = os.path.join(root, "properties_set.txt")
+            prop_folder = os.path.join(root, "prop")
 
-            # Add the statistical quantities
-            # short_path
-            all_data["short_mean"].append(df["#short_path"].mean())
-            all_data["short_err"].append(df["#short_path"].sem())
-            all_data["short_err_per"].append((df["#short_path"].sem() / df["#short_path"].mean())*100)
-            # diameter
-            all_data["diameter_mean"].append(df["#diamater"].mean())
-            all_data["diameter_err"].append(df["#diamater"].sem())
-            all_data["diameter_err_per"].append((df["#diamater"].sem() / df["#diamater"].mean())*100)
-            # ass_coeff
-            all_data["ass_coeff_mean"].append(df["#ass_coeff"].mean())
-            all_data["ass_coeff_err"].append(df["#ass_coeff"].sem())
-            all_data["ass_coeff_err_per"].append(abs((df["#ass_coeff"].sem() / df["#ass_coeff"].mean())*100))
+            # Se o arquivo properties_set.txt não existe e a pasta prop está vazia, apaga a pasta root
+            if not os.path.exists(properties_file) and (not os.path.exists(prop_folder) or not os.listdir(prop_folder)):
+                print(f"❌ Removendo pasta vazia e sem dados: {root}")
+                shutil.rmtree(root, ignore_errors=True)  # Remove toda a pasta sem erro
+                continue  # Pula para a próxima iteração
 
+            # Se o arquivo existir, continuar processando
+            if os.path.exists(properties_file):
+                print(f"N = {nvalue}, dim = {dvalue}, alpha_a = {aavalue:.2f}, alpha_g = {agvalue:.2f}")
+                df = pd.read_csv(properties_file, sep=' ')
+
+                # Adicionar parâmetros ao dicionário
+                all_data["N"].append(nvalue)
+                all_data["dim"].append(dvalue)
+                all_data["alpha_a"].append(round(aavalue, 2))
+                all_data["alpha_g"].append(round(agvalue, 2))
+                all_data["N_samples"].append(len(df))
+
+                # Adicionar as quantidades estatísticas
+                all_data["short_mean"].append(df["#short_path"].mean())
+                all_data["short_err"].append(df["#short_path"].sem())
+                all_data["short_err_per"].append((df["#short_path"].sem() / df["#short_path"].mean()) * 100)
+
+                all_data["diameter_mean"].append(df["#diamater"].mean())
+                all_data["diameter_err"].append(df["#diamater"].sem())
+                all_data["diameter_err_per"].append((df["#diamater"].sem() / df["#diamater"].mean()) * 100)
+
+                all_data["ass_coeff_mean"].append(df["#ass_coeff"].mean())
+                all_data["ass_coeff_err"].append(df["#ass_coeff"].sem())
+                all_data["ass_coeff_err_per"].append(abs((df["#ass_coeff"].sem() / df["#ass_coeff"].mean()) * 100))
+
+    # Criar dataframe e salvar
     df_all = pd.DataFrame(data=all_data)
     df_all.to_csv("../../data/all_data.txt", sep=' ', index=False)
+    print("✅ Processamento concluído!")
 
 # Linear regression with errors in parameters
 def linear_regression(X,Y,Erro_Y,Parameter):
@@ -740,3 +761,20 @@ def remove_cod_file_column(N, dim, alpha_a, alpha_g):
         # Caso a coluna não exista, não faz nada
         print(f"A coluna '#cod_file' não existe no arquivo {file_path}. Nenhuma ação realizada.")
         pass
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
+from matplotlib.ticker import MultipleLocator
+
+def find_intersection(x, y):
+    for i in range(len(y) - 1):
+        if y[i] * y[i + 1] < 0:  # Troca de sinal entre pontos consecutivos
+            x1, x2 = x[i], x[i + 1]
+            y1, y2 = y[i], y[i + 1]
+            
+            x_intercept = x1 - (y1 * (x2 - x1)) / (y2 - y1)
+            y_intercept = 0  # Pois estamos buscando a interseção com y=0
+            
+            return x_intercept, y_intercept
+    return None, None

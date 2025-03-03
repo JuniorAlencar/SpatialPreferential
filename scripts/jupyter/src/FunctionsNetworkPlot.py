@@ -7,6 +7,9 @@ from collections import defaultdict
 import networkx as nx
 import matplotlib as mpl
 from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 mpl.rcParams['axes.linewidth'] = 1.4 #set the value globally
 
 # Return 
@@ -75,63 +78,90 @@ def select_first_gml_gz_file(N, dim, alpha_a, alpha_g):
     print("Nenhum arquivo .gml.gz encontrado na pasta.")
     return None
 
-# draw network in suplots 2D
-def draw_graph_subplots(ax, G, pos, title, row, col):
-    # Definir cores para os nós, destacando o nó na origem
-    node_colors = ['#ff6666' for _ in pos]  # Todos os nós inicialmente vermelhos
-    special_node = None  # Para armazenar o nó na origem
 
-    # Identificar se existe um nó na posição (0,0)
-    for node, (x, y) in pos.items():
-        if x == 0 and y == 0:
-            special_node = node  # Guardar o nó da origem
-            node_colors[list(pos.keys()).index(node)] = '#66b3ff'  # Azul-claro para a origem
-
-    # Desenhar arestas primeiro
-    nx.draw_networkx_edges(G, pos, ax=ax, edge_color='#000000', hide_ticks=False)
-
-    # Desenhar todos os nós (exceto o nó na origem, que será desenhado depois)
-    node_list = list(pos.keys())
-    if special_node:
-        node_list.remove(special_node)  # Remove o nó da origem para desenhá-lo separadamente
-
-    nx.draw_networkx_nodes(G, pos, ax=ax, nodelist=node_list, node_size=500,
-                            node_color='#ff6666', edgecolors='#000000', hide_ticks=False)
-
-    # Desenhar o nó da origem por último, para sobrepor os demais
-    if special_node:
-        nx.draw_networkx_nodes(G, pos, ax=ax, nodelist=[special_node], node_size=700, 
-                               node_color='#66b3ff', edgecolors='#000000', linewidths=2.5, hide_ticks=False)
-
-    ax.set_title(title, fontsize=30)
-
-    # Ajuste os limites dos eixos
+def get_limits_for_first_subplot(pos):
+    """ Calcula limites para garantir que o primeiro subplot não seja cortado """
     x_values = np.array([x for x, y in pos.values()])
     y_values = np.array([y for x, y in pos.values()])
 
-    x_min, x_max = x_values.min() - 1, x_values.max() + 1
-    y_min, y_max = y_values.min() - 1, y_values.max() + 1
+    x_min, x_max = x_values.min(), x_values.max()
+    y_min, y_max = y_values.min(), y_values.max()
 
-    ax.set_xlim(x_min, x_max)
-    ax.set_ylim(y_min, y_max)
+    # Adicionar margem para melhor visualização
+    margin_x = (x_max - x_min) * 0.10  
+    margin_y = (y_max - y_min) * 0.10
 
-    # Definir os ticks para garantir que os números apareçam nos eixos
-    ax.set_xticks(np.linspace(x_min, x_max, num=5))  # Ticks do eixo X
-    ax.set_yticks(np.linspace(y_min, y_max, num=5))  # Ticks do eixo Y
+    return (x_min - margin_x, x_max + margin_x), (y_min - margin_y, y_max + margin_y)
+
+def calculate_center_of_mass(pos):
+    """Calcula o centro de massa do grafo"""
+    x_cm = sum(x for x, y in pos.values()) / len(pos)
+    y_cm = sum(y for x, y in pos.values()) / len(pos)
+    return x_cm, y_cm
+
+def draw_graph_subplots(ax, G, pos, title, row, col, adjust_limits=False):
+    # Criar um degradê de cores usando um mapa de cores atualizado
+    cmap = plt.get_cmap('viridis', len(pos))
+    norm = mcolors.Normalize(vmin=0, vmax=len(pos) - 1)
+    
+    # Definir cores para os nós, variando de acordo com o índice
+    node_colors = [cmap(norm(i)) for i in range(len(pos))]
+
+    # Ordenar os nós numericamente
+    node_list = sorted(pos.keys(), key=lambda x: int(x.split('_')[1]))
+
+    # **Calcular centro de massa**
+    x_cm, y_cm = calculate_center_of_mass(pos)
+    G.add_node("cm", pos=(x_cm, y_cm))  # Adicionar o nó do centro de massa
+    pos["cm"] = (x_cm, y_cm)  # Atualizar dicionário com a nova posição
+
+    # Desenhar arestas primeiro
+    nx.draw_networkx_edges(G, pos, ax=ax, edge_color='#000000', alpha=0.7, width=0.8, style='solid')
+
+    # Desenhar nós com cores do degradê
+    nx.draw_networkx_nodes(G, pos, ax=ax, nodelist=node_list, node_size=100,
+                            node_color=node_colors, edgecolors='#000000', linewidths=0.8)
+
+    # **Desenhar o centro de massa destacado**
+    nx.draw_networkx_nodes(G, pos, ax=ax, nodelist=["cm"], node_size=100, 
+                            node_color="red", edgecolors="black", linewidths=2.0)
+
+    ax.set_title(title, fontsize=17)
+
+    # Ajustar os limites apenas para o primeiro subplot
+    if adjust_limits:
+        global_x_limits, global_y_limits = get_limits_for_first_subplot(pos)
+        ax.set_xlim(global_x_limits)
+        ax.set_ylim(global_y_limits)
+
+    # Ajustar margem para evitar corte dos ticks
+    ax.margins(0.1)
+
+    # Restaurando os ticks corretamente
+    ax.set_xticks(np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], num=5))
+    ax.set_yticks(np.linspace(ax.get_ylim()[0], ax.get_ylim()[1], num=5))
 
     # Exibir os rótulos dos eixos conforme especificado
     if col == 0:
-        ax.set_ylabel(r'$Y$', fontsize=17)  # Exibir rótulo do eixo Y na coluna da esquerda
+        ax.set_ylabel(r'$Y$', fontsize=19)
     else:
-        ax.set_ylabel("")  # Esconder rótulo do eixo Y
+        ax.set_ylabel("")
 
     if row == 2:
-        ax.set_xlabel(r'$X$', fontsize=17)  # Exibir rótulo do eixo X na última linha
+        ax.set_xlabel(r'$X$', fontsize=19)
     else:
-        ax.set_xlabel("")  # Esconder rótulo do eixo X
+        ax.set_xlabel("")
     
-    # Garantir que os valores numéricos dos eixos apareçam em todos os plots
-    ax.tick_params(axis='both', which='both', length=4.0, width=1.4, direction='in', labelsize=15)
+    # **Forçar a exibição dos valores dos ticks**
+    ax.tick_params(axis='both', which='both', length=4.0, width=1.4, direction='in', labelsize=17,
+                   labelbottom=True, labelleft=True, pad=8.0)
+
+    # **Garantir que os números dos ticks apareçam**
+    for label in ax.get_xticklabels() + ax.get_yticklabels():
+        label.set_visible(True)
+    
+    # **Remover completamente as grades**
+    ax.grid(False)
 
 # draw one single network of dimensions dimension = 1, 2 or 3
 def draw_graph(ax, G, pos, title, dim=2):
