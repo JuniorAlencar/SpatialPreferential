@@ -12,6 +12,7 @@ data_*/
 !data/coeff_linear.txt
 .vscode
 network/
+results/
 
 # Ignore parms to run multithread in PC
 parms_pc_*/
