@@ -275,11 +275,9 @@ def q_exp(x, q, b):
     A = normalized_constant(x, q, b)
     return A * (1 - (1 - q) * (x / b)) ** (1 / (1 - q))
 
-
 def optimize_q_exp(k, pk, q_initial=1.333, b_initial=0.40, delta_q=0.01, delta_b=0.01):
     """
-    Otimiza os parâmetros q e b do ajuste q-exponencial dentro de uma faixa restrita
-    e retorna os erros associados.
+    Otimiza os parâmetros q e b do ajuste q-exponencial dentro de uma faixa restrita.
     
     Parâmetros:
         k (array): Valores de k.
@@ -292,8 +290,6 @@ def optimize_q_exp(k, pk, q_initial=1.333, b_initial=0.40, delta_q=0.01, delta_b
     Retorna:
         fitted_q (float): Melhor valor ajustado de q.
         fitted_b (float): Melhor valor ajustado de b.
-        error_q (float): Erro associado ao ajuste de q.
-        error_b (float): Erro associado ao ajuste de b.
     """
     # Definir a função q-exponencial com normalização segura
     def normalized_constant_safe(q, b, k_vals):
@@ -311,16 +307,12 @@ def optimize_q_exp(k, pk, q_initial=1.333, b_initial=0.40, delta_q=0.01, delta_b
     bounds_ultra_fine = ([q_initial - delta_q, b_initial - delta_b], [q_initial + delta_q, b_initial + delta_b])
 
     # Ajuste ultra fino dentro dessa faixa extremamente reduzida
-    popt_ultra_fine, pcov_ultra_fine = curve_fit(q_exp_safe, k, pk, p0=[q_initial, b_initial], bounds=bounds_ultra_fine)
+    popt_ultra_fine, _ = curve_fit(q_exp_safe, k, pk, p0=[q_initial, b_initial], bounds=bounds_ultra_fine)
 
     # Parâmetros finais ajustados
     fitted_q, fitted_b = popt_ultra_fine
 
-    # Cálculo dos erros associados (desvio padrão dos parâmetros)
-    perr = np.sqrt(np.diag(pcov_ultra_fine))
-    error_q, error_b = perr
-
-    return fitted_q, fitted_b, error_q, error_b
+    return fitted_q, fitted_b
 
 def ln_q(k, pk, q, eta):
     k_values = np.zeros(len(k))
@@ -423,83 +415,71 @@ def distance_file(N, dim, alpha_a, alpha_g):
 
     print(f"Processamento concluído. Dados salvos em {output_dir}")
 
+
+
 def bootstrap_q_exp(k, pk, dim, alpha_a=2.0, n_bootstrap=1000):
     """
-    Realiza um bootstrap para estimar os melhores valores de q e b, considerando os erros dos ajustes.
+    Realiza um bootstrap para estimar os melhores valores de q e b.
     
     Parâmetros:
         k (array): Valores de k.
         pk (array): Valores de P(k).
-        dim (int): Dimensão do sistema.
-        alpha_a (float): Parâmetro alpha_a.
         n_bootstrap (int): Número de reamostragens para o bootstrap.
     
     Retorna:
         mean_q (float): Média dos valores ajustados de q.
-        std_q_total (float): Erro total de q considerando propagação de incerteza.
+        std_q (float): Desvio padrão de q.
         mean_b (float): Média dos valores ajustados de b.
-        std_b_total (float): Erro total de b considerando propagação de incerteza.
+        std_b (float): Desvio padrão de b.
     """
     
-    # Filtragem dos dados para pk <= 10⁻⁶
+    # Filtering data for pk <= 10⁻⁶, return k_filtering, pk_filtering
     k_filtered = []
     pk_filtered = []
     threshold = 1e-6  # Definição do limite mínimo
     
     for k_sublist, pk_sublist in zip(k, pk):
+        # Filtra os valores mantendo a relação 1:1
         filtered_pairs = [(ki, pki) for ki, pki in zip(k_sublist, pk_sublist) if pki >= threshold]
-        print(filtered_pairs)
+        
+        # Separa novamente em listas individuais
         if filtered_pairs:
             k_filtered.append([ki for ki, pki in filtered_pairs])
             pk_filtered.append([pki for ki, pki in filtered_pairs])
         else:
-            k_filtered.append([])  
+            k_filtered.append([])  # Mantém a estrutura original
             pk_filtered.append([])
     
-    # Transformar listas de listas em listas planas
     k_flat = [item for sublist in k_filtered for item in sublist]
     pk_flat = [item for sublist in pk_filtered for item in sublist]
 
     q_values = []
     b_values = []
-    q_errors = []
-    b_errors = []
-
     Q_init = q(alpha_a, dim)
     B_init = eta(alpha_a, dim)
-
     for _ in range(n_bootstrap):
         indices = np.random.choice(len(k_flat), size=len(k_flat), replace=True)
         k_sample = np.array(k_flat)[indices]
         pk_sample = np.array(pk_flat)[indices]
         
         try:
-            q_fit, b_fit, error_q, error_b = optimize_q_exp(k_sample, pk_sample, q_initial=Q_init, b_initial=B_init, delta_q=0.01, delta_b=0.01)
+            q_fit, b_fit = optimize_q_exp(k_sample, pk_sample, q_initial=Q_init, b_initial=B_init, delta_q=0.01, delta_b=0.01)
             q_values.append(q_fit)
             b_values.append(b_fit)
-            q_errors.append(error_q)
-            b_errors.append(error_b)
         except:
-            continue  # Ignorar se a otimização falhar
-
-    # Cálculo das médias dos parâmetros
+            continue  # Se a otimização falhar, ignora essa amostra
+    
     mean_q = np.mean(q_values)
+    std_q = np.std(q_values)
     mean_b = np.mean(b_values)
+    std_b = np.std(b_values)
+    
+    return mean_q, std_q, mean_b, std_b
 
-    # Cálculo do desvio padrão do bootstrap
-    std_q_bootstrap = np.std(q_values)
-    std_b_bootstrap = np.std(b_values)
 
-    # Cálculo da média dos erros individuais (propagação de incerteza)
-    mean_q_error = np.mean(np.array(q_errors)**2)  # Média dos erros ao quadrado
-    mean_b_error = np.mean(np.array(b_errors)**2)
-
-    # Cálculo do erro total considerando propagação
-    std_q_total = np.sqrt(std_q_bootstrap**2 + mean_q_error)
-    std_b_total = np.sqrt(std_b_bootstrap**2 + mean_b_error)
-
-    return mean_q, std_q_total, mean_b, std_b_total
-
+import numpy as np
+import pandas as pd
+import os
 
 def remove_last_Y_entries(dim, alpha_a, alpha_g, Y):
     """

@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
     SamuraI S(xargs);
     S.createGraph();
 //    double l = S.computeGlobalNavigation().shortestpath;
-//    int d = S.computeGlobalNavigation().diamater;
+  //  int d = S.computeGlobalNavigation().diamater;
     
 //    double r = S.computeAssortativityCoefficient();
 	//S.writeConnections(connections_file);
@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
 //    cout << prop_file << endl;
 //    ofstream pout(prop_file);
 //    pout << "#mean shortest path," << "# diamater," << "#assortativity coefficient\r\n";
-  //  pout << l << "," << d << "," << r << endl;
+//    pout << l << "," << d << "," << r << endl;
 //    pout.close();
 
     S.clear();

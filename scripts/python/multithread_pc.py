@@ -18,19 +18,18 @@ import pandas as pd
 
 N = 10**5
 N_s = 50
-alpha_g_f = 2.0
+dim = [1,2,3,4]
 alpha_a_f = 2.0
-# alpha_a, dim
-parms_alpha_a = [(1.2,1), (1.4,1), (1.6,1), (1.8, 1),(2.2, 1), (2.4, 1),(2.6, 1),(2.8, 1),(1.2,2), (1.4,2), (1.6,2), (1.8, 2),(2.2, 2), (2.4, 2),(2.6, 2),(2.8, 2),(3.2, 3), (3.4, 3),(3.6, 3),(3.8, 3),(3.2, 4), (3.4, 4),(3.6, 4),(3.8, 4),(4.2, 4), (4.4, 4),(4.6, 4),(4.8, 4)]
+alpha_g_v = [6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0]
 
-for p in parms_alpha_a:
-	alpha_a, dim = p[0], p[1]
-	FunctionsFile.JsonGenerate(N, alpha_a, alpha_g_f, dim)
-#for d in dim:
-	#for aa in alpha_a_v:
-#		FunctionsFile.JsonGenerate(N, aa, alpha_g_f, d)
-	#for ag in alpha_g_v:
-#		FunctionsFile.JsonGenerate(N, alpha_a_f, ag, d)
+alpha_a_v = [9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0]
+alpha_g_f = 2.0
+
+for d in dim:
+	for aa in alpha_a_v:
+		FunctionsFile.JsonGenerate(N, aa, alpha_g_f, d)
+	for ag in alpha_g_v:
+		FunctionsFile.JsonGenerate(N, alpha_a_f, ag, d)
     #FunctionsFile.JsonGenerate(N, alpha_a[i], float(row["alpha_g"]), float(row["dim"]))        
 # df = pd.read_csv("run_multi.txt", delimiter=' ')
 # df_n = df[df["N"]==N]
