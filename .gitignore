@@ -13,6 +13,7 @@ data_*/
 .vscode
 network/
 results/
+data.zip
 
 # Ignore parms to run multithread in PC
 parms_pc_*/

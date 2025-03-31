@@ -274,15 +274,6 @@ def all_properties_file(N, dim, alpha_a, alpha_g):
     else:
         print("Nenhuma atualização necessária. Todos os arquivos já estavam processados.")
 
-import os
-import re
-import pandas as pd
-
-import os
-import re
-import pandas as pd
-import shutil  # Importado para remover diretórios com conteúdo
-
 def all_data(folder_data):
     # Caminho inicial
     base_path = folder_data
@@ -344,6 +335,10 @@ def all_data(folder_data):
 
     # Criar dataframe e salvar
     df_all = pd.DataFrame(data=all_data)
+    df_all = df_all[df_all["alpha_g"]>=1.0]
+    df_all = df_all.sort_values("N_samples", ascending=False).drop_duplicates(
+        subset=["N", "dim", "alpha_a", "alpha_g"], keep="first"
+    ).reset_index(drop=True)
     df_all.to_csv("../../data/all_data.txt", sep=' ', index=False)
     print("✅ Processamento concluído!")
 
