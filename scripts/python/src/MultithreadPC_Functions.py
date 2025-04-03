@@ -1,6 +1,8 @@
 import numpy as np
 import glob
 import os
+import pandas as pd
+import re
 
 def JsonGenerate(N, alpha_a,alpha_g,dim):
     filename = f"N{N}_a{alpha_a:.2f}_g{alpha_g:.2f}_d{dim}.json"
@@ -26,45 +28,64 @@ def JsonGenerate(N, alpha_a,alpha_g,dim):
         x.write(k)
     x.close()
 
-def multithread_pc(N,NumSamples):
+def multithread_pc(N, NumSamples):
     filename = f"N_{N}_multithread_pc.sh"
 
     a = "#!/bin/bash\n\n"
-    
     b = "# Define uma função que contêm o código para rodar em paralelo\n"
-    
     c = "run_code() {\n\t"
     d = f"time ../build/exe1 ../parms_pc_{N}/$1\n"
     e = "}\n"
     e1 = """progress_bar() {\n \tlocal current=$1\n \tlocal total=$2\n \tlocal percent=$(( current * 100 / total))\n \tlocal filled=$(( percent * 50 / 100))\n \tlocal empty=$(( 50 - filled))\n"""
     e2 = """\tprintf "\\r[%-${filled}s%${empty}s] %d%% (%d/%d)" "#" "" "$percent" "$current" "$total" \n}\n\n"""
-    f = "# Exportar a função usando o módulo Parallel\n"
     g = "export -f run_code\n\n"
+
+    # check number of files in specific folders
+    df = pd.read_csv("parameters.csv", sep=',')
+    df_n = df[df["N"]==N]
+    counts = []
+    for _, row in df_n.iterrows():
+        dim, alpha_a = int(row["dim"]),float(row["alpha_a"])
+        
+        data_path = f"../../data_2/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_2.00/prop"
+        counts.append(len(glob.glob(os.path.join(data_path, "*.csv"))))
     
+    # Se nenhuma pasta foi encontrada
+    if not counts:
+        print("[WARN] Nenhuma pasta 'prop/' encontrada. Continuando com o valor total.")
+        n_to_generate = NumSamples
+    else:
+        nss_min = min(counts)
+        print(f"[INFO] Mínimo de arquivos encontrados em uma pasta: {nss_min}")
+        n_to_generate = max(0, NumSamples - nss_min)
+        print(f"[INFO] Gerando script para os {n_to_generate} restantes de {NumSamples}.")
+
+    if n_to_generate == 0:
+        print("[INFO] Todos os arquivos já foram gerados. Nenhum script necessário.")
+        return
+
+    # Caminho para arquivos json de parâmetros
     path_d = f"../../parms_pc_{N}"
-    all_files = glob.glob(os.path.join(path_d,"*.json"))
-    list_of_arguments = [V[2] for V in os.walk(path_d)][0]
-    list_of_arguments = str(list_of_arguments)
-    list_of_arguments = list_of_arguments.replace(',', '')
-    
-    h = f"arguments=(" 
-    i = list_of_arguments[1:-1] + ")\n\n"
+    all_jsons = glob.glob(os.path.join(path_d, "*.json"))
+    arguments = [os.path.basename(f) for f in all_jsons]
+
+    h = "arguments=("
+    i = " ".join(arguments) + ")\n\n"
+
     j = "x=0\n"
-    k = f"n_samples={NumSamples}\n"
-    l = f"while [ $x -le $n_samples ]\n"
+    k = f"n_samples={n_to_generate}\n"
+    l = "while [ $x -lt $n_samples ]\n"
     m = "do\n\t"
-    n = "parallel run_code :::\t" +  """ "${arguments[@]}"  """ "\n\t"
+    n = 'parallel run_code ::: "${arguments[@]}"\n\t'
     o = "x=$(( $x + 1))\n"
-    o1 = """\tprogress_bar "$x" "$n_samples"\n """
+    o1 = '\tprogress_bar "$x" "$n_samples"\n '
     p = "done"
 
-    
-    list_for_loop = [a,b,c,d,e,e1,e2,g,h,i,j,k,l,m,n,o,o1,p]
-    l = open("../" + filename, "w") # argument w: write if don't exist file
+    list_for_loop = [a, b, c, d, e, e1, e2, g, h, i, j, k, l, m, n, o, o1, p]
 
-    for k in list_for_loop:
-        l.write(k)
-    l.close()
+    with open("../" + filename, "w") as l:
+        for k in list_for_loop:
+            l.write(k)
 
 def permission_run(N):
 	os.system(f"chmod 700 ../N_{N}_multithread_pc.sh")
