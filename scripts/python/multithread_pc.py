@@ -17,12 +17,12 @@ import pandas as pd
 #return: set of .json file with above parameters 
 
 df = pd.read_csv("parameters.csv", sep=',')
-N_s = 350
-N = 20000
+N_s = 250
+N = 40000
 
 for _, row in df.iterrows():
     dim, alpha_a = int(row["dim"]),float(row["alpha_a"])
-    if (N==10000):
+    if (N==40000):
     	FunctionsFile.JsonGenerate(N, alpha_a, 2.0, dim)
 
 FunctionsFile.multithread_pc(N, N_s)
