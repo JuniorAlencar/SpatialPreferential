@@ -30,13 +30,12 @@ scripts/python/*.sh
 
 # data folders
 data/
-scripts/python/credentials.json
-scripts/python/token.json
+
 
 # */gml/*
 # */prop/*
 # "!.*/filenames.txt"
 # "!.*/properties_set.txt"
 # "!.*/time_process_seconds.txt"
-
+results/
 data_used_att.zip

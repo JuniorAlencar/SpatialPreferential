@@ -9,11 +9,19 @@ import os
 #text_terminal()                                    -> return .txt with text to run codes in cluster
 #------------------------------------------------------------------------------------------
 
-df = pd.read_csv("parameters.csv", sep=',')
-x,y = 143, 293
-for index, row in df.iloc[x:y].iterrows():
-	N, N_s, dim, alpha_a = int(row["N"]), int(row["N_s"]), int(row["dim"]), row["alpha_a"]
-	FunctionsFile.JsonGenerate(N, alpha_a, 2.0, dim)
-	FunctionsFile.ScriptGenerate(N, alpha_a, 2.0, dim, N_s)    
-    		                
+alpha_a_N32 = [0.50, 1.25, 1.50, 1.75, 2.50, 3.25, 4.25, 4.75, 5.50, 5.75]
+alpha_a_ALL = [11.25, 11.50, 11.75, 12.25, 12.50, 12.75, 13.25, 13.50, 13.75, 14.25, 14.50,14.75, 15.25, 15.50, 15.75]
+N = [5000, 10000, 20000, 40000, 80000, 160000, 320000]	
+N_s = [10000, 1600, 350, 250, 100, 15, 7]
+dim = [1,2,3,4]
+# for d in dim:
+# 	for aa32 in alpha_a_N32:
+# 		FunctionsFile.JsonGenerate(320000, aa32, 2.0, d)
+# 		FunctionsFile.ScriptGenerate(320000, aa32, 2.0, d, 7)   
+for n in range(len(N)):
+	for d in dim:
+		for aa in alpha_a_ALL:
+			FunctionsFile.JsonGenerate(N[n], aa, 2.0, d)
+			FunctionsFile.ScriptGenerate(N[n], aa, 2.0, d, N_s[n])
+
 FunctionsFile.text_terminal()
