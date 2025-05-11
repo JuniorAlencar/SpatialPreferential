@@ -277,8 +277,9 @@ def q_exp(x, q, b):
 
 def optimize_q_exp(k, pk, q_initial=1.333, b_initial=0.40, delta_q=0.01, delta_b=0.01):
     """
-    Otimiza os parâmetros q e b do ajuste q-exponencial dentro de uma faixa restrita.
-    
+    Otimiza os parâmetros q e b do ajuste q-exponencial dentro de uma faixa restrita
+    e retorna também os erros padrão estimados para cada parâmetro.
+
     Parâmetros:
         k (array): Valores de k.
         pk (array): Valores de P(k).
@@ -290,29 +291,42 @@ def optimize_q_exp(k, pk, q_initial=1.333, b_initial=0.40, delta_q=0.01, delta_b
     Retorna:
         fitted_q (float): Melhor valor ajustado de q.
         fitted_b (float): Melhor valor ajustado de b.
+        perr_q (float): Erro padrão do parâmetro q.
+        perr_b (float): Erro padrão do parâmetro b.
     """
-    # Definir a função q-exponencial com normalização segura
+
+    # Função para normalizar com segurança
     def normalized_constant_safe(q, b, k_vals):
         try:
-            integral, _ = quad(lambda x: (1 - (1 - q) * (x / b)) ** (1 / (1 - q)), np.min(k_vals), np.max(k_vals))
+            integral, _ = quad(lambda x: (1 - (1 - q) * (x / b)) ** (1 / (1 - q)),
+                               np.min(k_vals), np.max(k_vals))
             return 1 / integral if integral > 0 else 1
         except:
             return 1
 
+    # Função q-exponencial normalizada
     def q_exp_safe(x, q, b):
         A = normalized_constant_safe(q, b, k)
         return A * (1 - (1 - q) * (x / b)) ** (1 / (1 - q))
 
-    # Ajustar corretamente os limites para garantir valores bem definidos
-    bounds_ultra_fine = ([q_initial - delta_q, b_initial - delta_b], [q_initial + delta_q, b_initial + delta_b])
+    # Limites dos parâmetros
+    bounds_ultra_fine = (
+        [q_initial - delta_q, b_initial - delta_b],
+        [q_initial + delta_q, b_initial + delta_b]
+    )
 
-    # Ajuste ultra fino dentro dessa faixa extremamente reduzida
-    popt_ultra_fine, _ = curve_fit(q_exp_safe, k, pk, p0=[q_initial, b_initial], bounds=bounds_ultra_fine)
+    # Ajuste usando curve_fit
+    popt_ultra_fine, pcov_ultra_fine = curve_fit(
+        q_exp_safe, k, pk, p0=[q_initial, b_initial], bounds=bounds_ultra_fine
+    )
 
-    # Parâmetros finais ajustados
+    # Parâmetros ajustados
     fitted_q, fitted_b = popt_ultra_fine
 
-    return fitted_q, fitted_b
+    # Erros padrão (raiz da diagonal da matriz de covariância)
+    perr_q, perr_b = np.sqrt(np.diag(pcov_ultra_fine))
+
+    return fitted_q, fitted_b, perr_q, perr_b
 
 def ln_q(k, pk, q, eta):
     k_values = np.zeros(len(k))
