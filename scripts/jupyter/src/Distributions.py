@@ -194,6 +194,11 @@ def log_binning(counter_dict, bin_count, save=False, **kwargs):
     keys = np.array(list(counter_dict.keys()), dtype=np.float64)
     values = np.array(list(counter_dict.values()), dtype=np.float64)
 
+    # Remover entradas com k = 0
+    nonzero_mask = keys > 0
+    keys = keys[nonzero_mask]
+    values = values[nonzero_mask]
+
     # Definir os limites dos bins logarítmicos
     min_x = np.log10(min(drop_zeros(keys)))
     max_x = np.log10(max(keys))
@@ -219,10 +224,12 @@ def log_binning(counter_dict, bin_count, save=False, **kwargs):
         Pk /= Pk_sum
 
     # Remover valores NaN ou infinitos
-    valid_values = np.isfinite(k) & np.isfinite(Pk)
+    # valid_values = np.isfinite(k) & np.isfinite(Pk)
+    # k = k[valid_values]
+    # Pk = Pk[valid_values]
+    valid_values = (k > 0) & np.isfinite(k) & np.isfinite(Pk)
     k = k[valid_values]
     Pk = Pk[valid_values]
-
     # Salvar se save=True
     if save:
         # Verifica se os argumentos necessários foram passados
@@ -429,6 +436,68 @@ def distance_file(N, dim, alpha_a, alpha_g):
 
     print(f"Processamento concluído. Dados salvos em {output_dir}")
 
+def combine_estimates_from_datasets(k_list, pk_list, dim, alpha_a=2.0,
+                                     q_initial=1.333, b_initial=0.40,
+                                     delta_q=0.01, delta_b=0.01):
+    """
+    Aplica optimize_q_exp a cada conjunto (k, pk) com filtragem e retorna os valores combinados de q e b com erro propagado.
+
+    Parâmetros:
+        k_list (list of lists): Lista de listas com valores de k (um por alpha_g).
+        pk_list (list of lists): Lista de listas com valores de pk correspondentes.
+        dim (int): Dimensão espacial do sistema.
+        alpha_a (float): Valor de alpha_a.
+        q_initial (float): Valor inicial para o ajuste de q.
+        b_initial (float): Valor inicial para o ajuste de b.
+        delta_q (float): Delta para busca em q.
+        delta_b (float): Delta para busca em b.
+
+    Retorna:
+        mean_q, error_q, mean_b, error_b
+    """
+    qs, bs = [], []
+    err_qs, err_bs = [], []
+
+    # Inicialização baseada na teoria
+    q_initial = q(alpha_a, dim)
+    b_initial = eta(alpha_a, dim)
+    
+    for k, pk in zip(k_list, pk_list):
+        # --- Filtragem de pk < 1e-6 mantendo correspondência com k ---
+        filtered_data = [(ki, pki) for ki, pki in zip(k, pk) if pki >= 1e-6]
+        if not filtered_data:
+            continue
+        k_filtered, pk_filtered = zip(*filtered_data)
+
+        try:
+            fitted_q, fitted_b, perr_q, perr_b = optimize_q_exp(
+                np.array(k_filtered), np.array(pk_filtered),
+                q_initial=q_initial,
+                b_initial=b_initial,
+                delta_q=delta_q,
+                delta_b=delta_b
+            )
+            qs.append(fitted_q)
+            bs.append(fitted_b)
+            err_qs.append(perr_q)
+            err_bs.append(perr_b)
+        except Exception as e:
+            print(f"Ajuste falhou para um conjunto: {e}")
+            continue
+
+    # Função auxiliar para média ponderada
+    def combine(values, errors):
+        values = np.array(values)
+        errors = np.array(errors)
+        weights = 1.0 / errors**2
+        mean = np.sum(weights * values) / np.sum(weights)
+        error = 1.0 / np.sqrt(np.sum(weights))
+        return mean, error
+
+    mean_q, error_q = combine(qs, err_qs)
+    mean_b, error_b = combine(bs, err_bs)
+
+    return mean_q, error_q, mean_b, error_b
 
 
 def bootstrap_q_exp(k, pk, dim, alpha_a=2.0, n_bootstrap=1000):
@@ -477,23 +546,19 @@ def bootstrap_q_exp(k, pk, dim, alpha_a=2.0, n_bootstrap=1000):
         pk_sample = np.array(pk_flat)[indices]
         
         try:
-            q_fit, b_fit = optimize_q_exp(k_sample, pk_sample, q_initial=Q_init, b_initial=B_init, delta_q=0.01, delta_b=0.01)
+            q_fit, b_fit, err_q, err_b = optimize_q_exp(k_sample, pk_sample, q_initial=Q_init, b_initial=B_init, delta_q=0.01, delta_b=0.01)
             q_values.append(q_fit)
             b_values.append(b_fit)
         except:
             continue  # Se a otimização falhar, ignora essa amostra
     
     mean_q = np.mean(q_values)
-    std_q = np.std(q_values)
+    std_q = np.std(q_values, ddof=1)
     mean_b = np.mean(b_values)
-    std_b = np.std(b_values)
+    std_b = np.std(b_values, ddof=1)
     
     return mean_q, std_q, mean_b, std_b
 
-
-import numpy as np
-import pandas as pd
-import os
 
 def remove_last_Y_entries(dim, alpha_a, alpha_g, Y):
     """
