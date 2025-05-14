@@ -182,8 +182,7 @@ def cumulative_distribution(distribution):
         p_cum[i] = p_cum[i-1] - distribution[i]
     return p_cum
 
-# Logbinnig_test
-
+# Log Binning
 def drop_zeros(a_list):
     """Remove valores zero da lista."""
     return [i for i in a_list if i > 0]
@@ -223,13 +222,11 @@ def log_binning(counter_dict, bin_count, save=False, **kwargs):
     if Pk_sum > 0:
         Pk /= Pk_sum
 
-    # Remover valores NaN ou infinitos
-    # valid_values = np.isfinite(k) & np.isfinite(Pk)
-    # k = k[valid_values]
-    # Pk = Pk[valid_values]
+    
     valid_values = (k > 0) & np.isfinite(k) & np.isfinite(Pk)
     k = k[valid_values]
     Pk = Pk[valid_values]
+    
     # Salvar se save=True
     if save:
         # Verifica se os argumentos necessários foram passados
@@ -257,8 +254,6 @@ def log_binning(counter_dict, bin_count, save=False, **kwargs):
 
     return k, Pk
 
-
-
 def q(alpha_a, d):
     ration = alpha_a/d
     if(0<=ration<=1):
@@ -284,25 +279,25 @@ def q_exp(x, q, b):
 
 def optimize_q_exp(k, pk, q_initial=1.333, b_initial=0.40, delta_q=0.01, delta_b=0.01):
     """
-    Otimiza os parâmetros q e b do ajuste q-exponencial dentro de uma faixa restrita
-    e retorna também os erros padrão estimados para cada parâmetro.
-
-    Parâmetros:
-        k (array): Valores de k.
-        pk (array): Valores de P(k).
-        q_initial (float): Valor inicial de q baseado na relação teórica.
-        b_initial (float): Valor inicial de b baseado na relação teórica.
-        delta_q (float): Intervalo de variação permitido para q.
-        delta_b (float): Intervalo de variação permitido para b.
+    Ajusta q e b inicialmente, depois fixa q e refina o ajuste de b para melhorar a precisão de b.
 
     Retorna:
         fitted_q (float): Melhor valor ajustado de q.
-        fitted_b (float): Melhor valor ajustado de b.
-        perr_q (float): Erro padrão do parâmetro q.
-        perr_b (float): Erro padrão do parâmetro b.
+        refined_b (float): Valor ajustado de b com q fixo.
+        perr_q (float): Erro padrão de q.
+        perr_b (float): Erro padrão de b (refinado).
     """
+    # --- Filtragem inicial ---
+    k = np.array(k)
+    pk = np.array(pk)
+    mask = pk >= 1e-6
+    k_filtered = k[mask]
+    pk_filtered = pk[mask]
 
-    # Função para normalizar com segurança
+    if len(k_filtered) == 0:
+        raise ValueError("Nenhum dado satisfaz a condição pk >= 1e-6.")
+
+    # --- Normalização segura ---
     def normalized_constant_safe(q, b, k_vals):
         try:
             integral, _ = quad(lambda x: (1 - (1 - q) * (x / b)) ** (1 / (1 - q)),
@@ -311,29 +306,48 @@ def optimize_q_exp(k, pk, q_initial=1.333, b_initial=0.40, delta_q=0.01, delta_b
         except:
             return 1
 
-    # Função q-exponencial normalizada
-    def q_exp_safe(x, q, b):
-        A = normalized_constant_safe(q, b, k)
-        return A * (1 - (1 - q) * (x / b)) ** (1 / (1 - q))
+    # --- Etapa 1: ajustar q e b livremente ---
+    def q_exp_full(x, q, b):
+        A = normalized_constant_safe(q, b, k_filtered)
+        inner = 1 - (1 - q) * (x / b)
+        result = np.zeros_like(x)
+        valid = inner > 0
+        result[valid] = A * inner[valid] ** (1 / (1 - q))
+        return result
 
-    # Limites dos parâmetros
-    bounds_ultra_fine = (
+    bounds_qb = (
         [q_initial - delta_q, b_initial - delta_b],
         [q_initial + delta_q, b_initial + delta_b]
     )
 
-    # Ajuste usando curve_fit
-    popt_ultra_fine, pcov_ultra_fine = curve_fit(
-        q_exp_safe, k, pk, p0=[q_initial, b_initial], bounds=bounds_ultra_fine
+    popt_qb, pcov_qb = curve_fit(
+        q_exp_full, k_filtered, pk_filtered,
+        p0=[q_initial, b_initial], bounds=bounds_qb
     )
 
-    # Parâmetros ajustados
-    fitted_q, fitted_b = popt_ultra_fine
+    fitted_q, prelim_b = popt_qb
+    perr_q = np.sqrt(pcov_qb[0, 0])
 
-    # Erros padrão (raiz da diagonal da matriz de covariância)
-    perr_q, perr_b = np.sqrt(np.diag(pcov_ultra_fine))
+    # --- Etapa 2: fixar q e refinar b ---
+    def q_exp_fixed_q(x, b):
+        A = normalized_constant_safe(fitted_q, b, k_filtered)
+        inner = 1 - (1 - fitted_q) * (x / b)
+        result = np.zeros_like(x)
+        valid = inner > 0
+        result[valid] = A * inner[valid] ** (1 / (1 - fitted_q))
+        return result
 
-    return fitted_q, fitted_b, perr_q, perr_b
+    bounds_b = (b_initial - delta_b, b_initial + delta_b)
+
+    popt_b, pcov_b = curve_fit(
+        q_exp_fixed_q, k_filtered, pk_filtered,
+        p0=[prelim_b], bounds=bounds_b
+    )
+
+    refined_b = popt_b[0]
+    perr_b = np.sqrt(pcov_b[0, 0])
+
+    return fitted_q, refined_b, perr_q, perr_b
 
 def ln_q(k, pk, q, eta):
     k_values = np.zeros(len(k))
