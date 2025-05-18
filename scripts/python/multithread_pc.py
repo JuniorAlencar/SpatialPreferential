@@ -16,14 +16,24 @@ import pandas as pd
 #N: Number of nodes;
 #return: set of .json file with above parameters 
 
-df = pd.read_csv("parameters.csv", sep=',')
-N_s = 250
-N = 40000
 
-for _, row in df.iterrows():
-    dim, alpha_a = int(row["dim"]),float(row["alpha_a"])
-    if (N==40000):
-    	FunctionsFile.JsonGenerate(N, alpha_a, 2.0, dim)
+N_s = 50
+N = 10**5
+N_s = 50
+dimensions = [1,2,3,4]
+alpha_a_f = 2.0
+alpha_g_v = [1.5, 2.5, 3.5, 4.5, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5]
+
+alpha_a_v = [1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5]
+alpha_g_f = 2.0
+
+for dim in dimensions:
+    for aa in alpha_a_v:
+        FunctionsFile.JsonGenerate(N, aa, alpha_g_f, dim)
+
+for dim in dimensions:
+    for ag in alpha_g_v:
+        FunctionsFile.JsonGenerate(N, alpha_a_f, ag, dim)
 
 FunctionsFile.multithread_pc(N, N_s)
 FunctionsFile.permission_run(N)

@@ -77,14 +77,14 @@ int main(int argc, char* argv[]) {
 //    double r = S.computeAssortativityCoefficient();
 	//S.writeConnections(connections_file);
     //S.writeDegrees(degree_file);
-    S.writeGML(gml_file);
+      S.writeGML(gml_file);
 //    cout << prop_file << endl;
 //    ofstream pout(prop_file);
 //    pout << "#mean shortest path," << "# diamater," << "#assortativity coefficient\r\n";
 //    pout << l << "," << d << "," << r << endl;
 //    pout.close();
 
-    S.clear();
+       S.clear();
     
     cout << time_process_file << endl;
     // Gen file to calculate time to run process
