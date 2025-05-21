@@ -45,9 +45,9 @@ def multithread_pc(N, NumSamples):
     df_n = df[df["N"]==N]
     counts = []
     for _, row in df_n.iterrows():
-        dim, alpha_a = int(row["dim"]),float(row["alpha_a"])
+        dim, alpha_a, alpha_g = int(row["dim"]),float(row["alpha_a"]), float(row["alpha_g"])
         
-        data_path = f"../../data_2/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_2.00/prop"
+        data_path = f"../../data_2/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/prop"
         counts.append(len(glob.glob(os.path.join(data_path, "*.csv"))))
     
     # Se nenhuma pasta foi encontrada
