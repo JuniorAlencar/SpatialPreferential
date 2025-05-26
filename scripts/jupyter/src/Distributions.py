@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import os  
+import os
 import glob
 import gzip
+import json
+import matplotlib.pyplot as plt
 import math
 from multiprocessing import Pool
 from scipy.integrate import quad
@@ -118,12 +119,7 @@ def distance_file(N):
 
     print(f"\nProcessamento total concluído para N = {N}.")
 
-import os
-import glob
-import gzip
-import numpy as np
-import pandas as pd
-from multiprocessing import Pool
+
 
 
 def process_file(index_file_tuple):
@@ -866,3 +862,147 @@ def round_measurement(value, error):
     # Formatar com o mesmo número de casas decimais
     fmt = f"{{:.{order}f}}"
     return f"{fmt.format(rounded_value)} \\pm {fmt.format(rounded_error)}"
+
+
+
+def save_json_distributions(N: int, dim: list[int], alpha_a_v: list[float], alpha_g_v: list[float]):
+    
+    """
+        N (int): Number of nodes in network
+        dim (list(int)): list of all values of dimensions used
+        alpha_a_v (list(float)): list of all values alpha_a (with alpha_g = 2.00)
+        alpha_g_v (list(float)): list of all values alpha_g (with alpha_a = 2.00)
+    """
+    alpha_ag_f = 2.0
+
+    # Dicionários para armazenar dados separados
+    data_distance = []
+    data_degree = []
+
+    types = [
+        {
+            "name": "distance",
+            "csv_name": "distances_distribution_log.csv",
+            "npy_name": "distances.npy",
+            "csv_columns": ["ds", "pds"],
+            "data_list": data_distance,
+            "output_path": '../../data/distances_distributions.json'
+        },
+        {
+            "name": "degree",
+            "csv_name": "degree_distribution_linear.csv",
+            "npy_name": "degree.npy",
+            "csv_columns": ["k", "pk"],
+            "data_list": data_degree,
+            "output_path": '../../data/degree_distributions.json'
+        }
+    ]
+
+    for d in dim:
+        for t in types:
+            # Loop variando alpha_g
+            for alpha_g in alpha_g_v:
+                folder = f"../../data/N_{N}/dim_{d}/alpha_a_{alpha_ag_f:.2f}_alpha_g_{alpha_g:.2f}"
+                try:
+                    df = pd.read_csv(os.path.join(folder, t["csv_name"]), delimiter=' ')
+                    dados = np.load(os.path.join(folder, t["npy_name"]))
+                except Exception as e:
+                    print(f"Erro ao ler {folder} ({t['name']}): {e}")
+                    continue
+
+                N_s = int(dados.size / N)
+
+                entry = {
+                    "N": N,
+                    "alpha_A": round(alpha_ag_f, 2),
+                    "alpha_G": round(alpha_g, 2),
+                    "dim": d,
+                    "N_s": N_s,
+                    "k": df[t["csv_columns"][0]].tolist(),
+                    "Pk": df[t["csv_columns"][1]].tolist()
+                }
+                t["data_list"].append(entry)
+
+            # Loop variando alpha_a
+            for alpha_a in alpha_a_v:
+                folder = f"../../data/N_{N}/dim_{d}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_ag_f:.2f}"
+                try:
+                    df = pd.read_csv(os.path.join(folder, t["csv_name"]), delimiter=' ')
+                    dados = np.load(os.path.join(folder, t["npy_name"]))
+                except Exception as e:
+                    print(f"Erro ao ler {folder} ({t['name']}): {e}")
+                    continue
+
+                N_s = int(dados.size / N)
+
+                entry = {
+                    "N": N,
+                    "alpha_A": round(alpha_a, 2),
+                    "alpha_G": round(alpha_ag_f, 2),
+                    "dim": d,
+                    "N_s": N_s,
+                    "k": df[t["csv_columns"][0]].tolist(),
+                    "Pk": df[t["csv_columns"][1]].tolist()
+                }
+                t["data_list"].append(entry)
+
+    # Salvar os arquivos separados
+    for t in types:
+        with open(t["output_path"], 'w') as f:
+            json.dump(t["data_list"], f, indent=4)
+        print(f"Arquivo '{t['output_path']}' salvo com sucesso.")
+
+def json_to_dataframe_with_lists(json_path: str) -> pd.DataFrame:
+    """
+    Converte um arquivo JSON de distribuições em um DataFrame,
+    mantendo 'k' e 'Pk' como listas em cada linha.
+
+    Args:
+        json_path (str): Caminho para o arquivo JSON.
+
+    Returns:
+        pd.DataFrame: DataFrame onde cada linha contém os parâmetros
+                      (N, alpha_A, alpha_G, dim, N_s) e as listas 'k' e 'Pk'.
+    """
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+
+    df = pd.DataFrame(data)
+
+    return df
+
+def get_k_pk_from_dataframe(
+    df: pd.DataFrame,
+    dim: int,
+    fixed_param: str,
+    fixed_value: float,
+    varying_param_list: list[float]
+):
+    """
+    Extrai listas de k e Pk a partir do DataFrame, para uma dimensão e um parâmetro fixo.
+
+    Args:
+        df (pd.DataFrame): DataFrame convertido do JSON.
+        dim (int): Dimensão (1, 2, 3, 4).
+        fixed_param (str): Qual parâmetro fica fixo: 'alpha_A' ou 'alpha_G'.
+        fixed_value (float): Valor fixo de alpha_A ou alpha_G.
+        varying_param_list (list[float]): Lista dos valores do parâmetro que varia.
+
+    Returns:
+        tuple: (list_k, list_pk) -> listas de listas com os dados de k e P(k).
+    """
+    assert fixed_param in ['alpha_A', 'alpha_G'], "fixed_param deve ser 'alpha_A' ou 'alpha_G'"
+
+    varying_param = 'alpha_G' if fixed_param == 'alpha_A' else 'alpha_A'
+
+    df_filtered = df[
+        (df['dim'] == dim) &
+        (df[fixed_param] == fixed_value) &
+        (df[varying_param].isin(varying_param_list))
+    ]
+
+    k_list = df_filtered['k'].tolist()
+    pk_list = df_filtered['Pk'].tolist()
+
+    return k_list, pk_list
+

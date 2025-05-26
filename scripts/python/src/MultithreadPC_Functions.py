@@ -47,12 +47,12 @@ def multithread_pc(N, NumSamples):
     for _, row in df_n.iterrows():
         dim, alpha_a, alpha_g = int(row["dim"]),float(row["alpha_a"]), float(row["alpha_g"])
         
-        data_path = f"../../data_2/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/prop"
-        counts.append(len(glob.glob(os.path.join(data_path, "*.csv"))))
+        data_path = f"../../data_3/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/gml"
+        counts.append(len(glob.glob(os.path.join(data_path, "*.gml.gz"))))
     
     # Se nenhuma pasta foi encontrada
     if not counts:
-        print("[WARN] Nenhuma pasta 'prop/' encontrada. Continuando com o valor total.")
+        print("[WARN] Nenhuma pasta 'gml/' encontrada. Continuando com o valor total.")
         n_to_generate = NumSamples
     else:
         nss_min = min(counts)

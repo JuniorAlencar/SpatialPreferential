@@ -24,14 +24,28 @@ dimensions = [1,2,3,4]
 alpha_ag_f = 2.0
 #alpha_a_v = [2.0, 9.0]
 alpha_g_v = [1.5, 2.5, 3.5, 4.5, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5]
+#n, dim, alpha_a, alpha_g
+
+parms = {"N":[], "dim":[], "alpha_a":[], "alpha_g":[]}
 
 # for dim in dimensions:
 #     for aa in alpha_a_v:
 #         FunctionsFile.JsonGenerate(N, aa, alpha_ag_f, dim)
+#         parms["N"].append(N)
+#         parms["dim"].append(dim)
+#         parms["alpha_a"].append(aa)
+#         parms["alpha_g"].append(alpha_ag_f)
 
 for dim in dimensions:
     for ag in alpha_g_v:
         FunctionsFile.JsonGenerate(N, alpha_ag_f, ag, dim)
+        parms["N"].append(N)
+        parms["dim"].append(dim)
+        parms["alpha_a"].append(alpha_ag_f)
+        parms["alpha_g"].append(ag)
+
+df = pd.DataFrame(data=parms)
+df.to_csv("parameters.csv",sep=",")
 
 FunctionsFile.multithread_pc(N, N_s)
 FunctionsFile.permission_run(N)
