@@ -127,45 +127,59 @@ double SamuraI::computeAssortativityCoefficient() {
     return R;
 }
 
-// Navigation SamuraI::computeLocalNavigation(){
-//     struct Navigation Local;
+Navigation SamuraI::computeGlobalNavigation_Astar() {
+    Navigation AStar;
+    double meanShortestPath = 0.0;
+    std::vector<double> d(m_num_vertices, 0.0); // vetor para calcular o diâmetro
+    int aux = 0;
 
-//     int NV = num_vertices(G);
+    // Mapa de pesos das arestas com base na distância entre os sítios
+    std::map<edge_t, double> weight_map_data;
+    for (auto e : boost::make_iterator_range(edges(G))) {
+        vertex_t u = source(e, G);
+        vertex_t v = target(e, G);
+        weight_map_data[e] = (pos[u] - pos[v]).norm(); // distância euclidiana
+    }
+    auto edge_weight = boost::make_assoc_property_map(weight_map_data);
 
-//     std::random_device RD;      // Random device for catch random vertex
-//     boost::mt19937 gen(RD());
+    for (vertex_t u : boost::make_iterator_range(vertices(G))) {
+        // Mapas de distância e predecessores com segurança total via Boost
+        boost::vector_property_map<double> distances(num_vertices(G));
+        boost::vector_property_map<vertex_t> predecessors(num_vertices(G));
 
-//     vertex_t s = boost::random_vertex(G, gen); // Source random
-//     vertex_t t = boost::random_vertex(G, gen); // Target random
-    
-//     int count = 0;
-//     double q = 1.0;
-    
-//     //std::vector<int> d(num_vertices(G),0);
-//     for(int i=0;i<NV;i++){
-//         auto neighbours = boost::adjacent_vertices(s, G);
-//         std::vector<double> d_nt(boost::degree(s,G), 0.0);
-//         // distances between neibor and target
-        
-//         for (auto vd : make_iterator_range(neighbours)){
-//             // Position neighborhood
-//             Vector4d p = pos[vd];
-//             // Distance between target and neighborhood
-//             Vector4d Ruv = pos[t] - p;
-//             double Ruv_SQ = Ruv.transpose()*Ruv;
-//             d_nt[i] = Ruv_SQ;
-//             }
-//         // min value in distances
-//         auto min_value = std::min_element(std::begin(d_nt), std::end(d_nt));
-//         // catch the index of min value and redefine 's' for that node
-//         vertex_t k = std::distance(d_nt.begin(), min_value);
-//         s = k;
-//         }
-    
-//     Local.shortestpath = q;
-//     Local.diamater = count;
-//     return Local;
-// }
+        // Heurística nula (Dijkstra), pois estamos fazendo origem única → todos
+        auto heuristic = [](vertex_t) { return 0.0; };
+
+        boost::astar_search(
+            G,
+            u,
+            heuristic,
+            boost::weight_map(edge_weight)
+                .distance_map(distances)
+                .predecessor_map(predecessors)
+                .visitor(boost::make_astar_visitor(boost::null_visitor()))
+        );
+
+        for (vertex_t v : boost::make_iterator_range(vertices(G))) {
+            if (v != u && distances[v] < std::numeric_limits<double>::max()) {
+                meanShortestPath += distances[v];
+                if (distances[v] > d[aux])
+                    d[aux] = distances[v];
+            }
+        }
+    }
+
+    double count = static_cast<double>(num_vertices(G)) * (num_vertices(G) - 1);
+    meanShortestPath /= count;
+
+    AStar.shortestpath = meanShortestPath;
+    AStar.diamater = static_cast<int>(*std::max_element(d.begin(), d.end()));
+    return AStar;
+}
+
+
+
+
 
 void SamuraI::writeDegrees(std::string fname){
     std::cout << fname << std::endl;
@@ -237,3 +251,4 @@ void SamuraI::clear() {
     G.clear();
     pos.clear();
 };
+

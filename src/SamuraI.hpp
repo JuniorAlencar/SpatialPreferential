@@ -9,6 +9,13 @@
 #include <boost/graph/graph_traits.hpp>
 #include <boost/graph/properties.hpp>
 #include <boost/pending/property.hpp>
+#include <boost/graph/astar_search.hpp>
+#include <boost/graph/graph_traits.hpp>
+#include <boost/graph/properties.hpp>
+#include <boost/graph/visitors.hpp>
+#include <limits>
+#include <cmath>
+
 #include <boost/property_map/property_map.hpp>
 
 #include <cassert>
@@ -44,6 +51,36 @@ typedef std::pair<vertex_t, double> vertex_prop_double;
 
 typedef graph_traits<graph_t>::vertex_iterator vertex_it;
 typedef graph_traits<graph_t>::edge_iterator edge_it;
+
+
+template <class Graph, class CostType>
+
+struct zero_heuristic {
+    template <typename Vertex>
+    double operator()(Vertex const&) const {
+        return 0.0;
+    }
+};
+
+
+
+struct found_goal {}; // sinaliza término da busca
+
+template <class Vertex>
+class astar_goal_visitor : public boost::default_astar_visitor {
+private:
+    Vertex m_goal;
+
+public:
+    astar_goal_visitor(Vertex goal) : m_goal(goal) {}
+
+    template <class Graph>
+    void examine_vertex(Vertex u, Graph&) {
+        if (u == m_goal)
+            throw found_goal();
+    }
+};
+
 
 class SamuraI {
   private:
@@ -82,6 +119,7 @@ class SamuraI {
 	Navigation computeGlobalNavigation(void);
     void writeGML(std::string fname);
     double computeAssortativityCoefficient(void);
+    Navigation computeGlobalNavigation_Astar(void);
     //void writeR(std::string fname);
     
     void clear();

@@ -55,11 +55,12 @@ int main(int argc, char* argv[]) {
     samargs xargs = read_parametes(argv[1]);
 
     // set filenames
-    char n_folder[50], alpha_folder[160], gml_folder[170], prop_folder[170], prop_file[200], gml_file[200], time_process_file[200];
+    char n_folder[50], alpha_folder[160], gml_folder[170], prop_folder[170], prop_file[200], gml_file[200], L_coast_file[200] ,time_process_file[200];
     sprintf(n_folder, "./N_%d", xargs.num_vertices);    
     sprintf(alpha_folder, "%s/dim_%d/alpha_a_%1.2f_alpha_g_%1.2f", n_folder, xargs.dim, xargs.alpha_a, xargs.alpha_g);
     sprintf(gml_folder, "%s/gml", alpha_folder);
     sprintf(prop_folder, "%s/prop", alpha_folder);
+    sprintf(L_coast_file, "%s/L_coast_%d.csv", prop_folder, xargs.seed);
     sprintf(prop_file, "%s/prop_%d.csv", prop_folder, xargs.seed);
     sprintf(gml_file, "%s/gml_%d.gml.gz", gml_folder, xargs.seed);
     sprintf(time_process_file, "%s/time_process_seconds.txt", alpha_folder);
@@ -71,20 +72,36 @@ int main(int argc, char* argv[]) {
 
     SamuraI S(xargs);
     S.createGraph();
-//    double l = S.computeGlobalNavigation().shortestpath;
-  //  int d = S.computeGlobalNavigation().diamater;
     
-//    double r = S.computeAssortativityCoefficient();
-	//S.writeConnections(connections_file);
-    //S.writeDegrees(degree_file);
-      S.writeGML(gml_file);
-//    cout << prop_file << endl;
-//    ofstream pout(prop_file);
-//    pout << "#mean shortest path," << "# diamater," << "#assortativity coefficient\r\n";
-//    pout << l << "," << d << "," << r << endl;
-//    pout.close();
+    // // Navigator BFS (without coast)
+    // double l = S.computeGlobalNavigation().shortestpath;
+    // int d = S.computeGlobalNavigation().diamater;
 
-       S.clear();
+    // // Assortativity Coefficient
+    // double r = S.computeAssortativityCoefficient();
+    
+    // // Saving properties
+    // cout << prop_file << endl;
+    // ofstream pout(prop_file);
+    // pout << "#mean shortest path," << "# diamater," << "#assortativity coefficient\r\n";
+    // pout << l << "," << d << "," << r << endl;
+    // pout.close();
+
+    // // Navigator A* (with coast)
+    // double l_coast = S.computeGlobalNavigation_Astar().shortestpath;
+    // double d_coast = S.computeGlobalNavigation_Astar().diamater;
+    
+    // // shortest and diameter with coast
+    // cout << prop_file << endl;
+    // ofstream L_c(L_coast_file);
+    // L_c << "#L_coast," << "#D_coast\r\n";
+    // L_c << l_coast << "," << d_coast << endl;
+    // L_c.close();
+    
+    S.writeGML(gml_file);
+
+
+    S.clear();
     
     cout << time_process_file << endl;
     // Gen file to calculate time to run process
