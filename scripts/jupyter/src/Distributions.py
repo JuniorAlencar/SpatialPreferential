@@ -866,13 +866,17 @@ def round_measurement(value, error):
 
 
 def save_json_distributions(N: int, dim: list[int], alpha_a_v: list[float], alpha_g_v: list[float]):
-    
     """
         N (int): Number of nodes in network
         dim (list(int)): list of all values of dimensions used
         alpha_a_v (list(float)): list of all values alpha_a (with alpha_g = 2.00)
         alpha_g_v (list(float)): list of all values alpha_g (with alpha_a = 2.00)
     """
+    import os
+    import pandas as pd
+    import numpy as np
+    import json
+
     alpha_ag_f = 2.0
 
     # Dicionários para armazenar dados separados
@@ -918,9 +922,19 @@ def save_json_distributions(N: int, dim: list[int], alpha_a_v: list[float], alph
                     "alpha_G": round(alpha_g, 2),
                     "dim": d,
                     "N_s": N_s,
-                    "k": df[t["csv_columns"][0]].tolist(),
-                    "Pk": df[t["csv_columns"][1]].tolist()
                 }
+
+                if t["name"] == "distance":
+                    entry.update({
+                        "deltaS": df[t["csv_columns"][0]].tolist(),
+                        "pdeltaS": df[t["csv_columns"][1]].tolist()
+                    })
+                else:
+                    entry.update({
+                        "k": df[t["csv_columns"][0]].tolist(),
+                        "Pk": df[t["csv_columns"][1]].tolist()
+                    })
+
                 t["data_list"].append(entry)
 
             # Loop variando alpha_a
@@ -941,9 +955,19 @@ def save_json_distributions(N: int, dim: list[int], alpha_a_v: list[float], alph
                     "alpha_G": round(alpha_ag_f, 2),
                     "dim": d,
                     "N_s": N_s,
-                    "k": df[t["csv_columns"][0]].tolist(),
-                    "Pk": df[t["csv_columns"][1]].tolist()
                 }
+
+                if t["name"] == "distance":
+                    entry.update({
+                        "deltaS": df[t["csv_columns"][0]].tolist(),
+                        "pdeltaS": df[t["csv_columns"][1]].tolist()
+                    })
+                else:
+                    entry.update({
+                        "k": df[t["csv_columns"][0]].tolist(),
+                        "Pk": df[t["csv_columns"][1]].tolist()
+                    })
+
                 t["data_list"].append(entry)
 
     # Salvar os arquivos separados
@@ -951,6 +975,7 @@ def save_json_distributions(N: int, dim: list[int], alpha_a_v: list[float], alph
         with open(t["output_path"], 'w') as f:
             json.dump(t["data_list"], f, indent=4)
         print(f"Arquivo '{t['output_path']}' salvo com sucesso.")
+
 
 def json_to_dataframe_with_lists(json_path: str) -> pd.DataFrame:
     """
