@@ -225,9 +225,6 @@ def degree_file(N):
     print(f"\nProcessamento total concluído para N = {N}.")
 
 
-# Exemplo de uso:
-# degree_file(N=5000)
-
 
 # Função para apagar todos os arquivos dentro de pastas gml, mantendo a estrutura de pastas
 def delete_files_in_gml_folders(folder_path):
@@ -281,10 +278,10 @@ def distribution(degree, save=False, **kwargs):
             raise ValueError(f"Se save=True, os argumentos {required_keys} devem ser fornecidos.")
 
         # Obtém os valores das variáveis
-        N, dim, alpha_a, alpha_g, propertie = kwargs["N"], kwargs["dim"], kwargs["alpha_a"], kwargs["alpha_g"], kwargs["propertie"]
+        N, dim, alpha_a, alpha_g = kwargs["N"], kwargs["dim"], kwargs["alpha_a"], kwargs["alpha_g"]
 
         # Define o caminho do arquivo
-        save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/{propertie}_distribution_linear.csv"
+        save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/degree_distribution_linear.csv"
 
         # Salva os dados
         df = pd.DataFrame(data={"k": k_real, "pk": p_real})
@@ -302,78 +299,6 @@ def cumulative_distribution(distribution):
     for i in range(1,len(distribution)):
         p_cum[i] = p_cum[i-1] - distribution[i]
     return p_cum
-
-# Log Binning
-def drop_zeros(a_list):
-    """Remove valores zero da lista."""
-    return [i for i in a_list if i > 0]
-
-# def log_binning(counter_dict, bin_count, save=False, **kwargs):
-#     """Realiza binagem logarítmica e normaliza P(k). Se save=True, salva os dados."""
-    
-#     keys = np.array(list(counter_dict.keys()), dtype=np.float64)
-#     values = np.array(list(counter_dict.values()), dtype=np.float64)
-
-#     # Remover entradas com k = 0
-#     nonzero_mask = keys > 0
-#     keys = keys[nonzero_mask]
-#     values = values[nonzero_mask]
-
-#     # Definir os limites dos bins logarítmicos
-#     min_x = np.log10(min(drop_zeros(keys)))
-#     max_x = np.log10(max(keys))
-
-#     bins = np.logspace(min_x, max_x, num=bin_count)
-
-#     # Calcular os histogramas
-#     hist_counts, bin_edges = np.histogram(keys, bins=bins, weights=values, density=False)
-#     bin_counts, _ = np.histogram(keys, bins=bins)
-
-#     # Evitar divisões por zero
-#     valid_bins = bin_counts > 0
-#     Pk = np.zeros_like(hist_counts, dtype=np.float64)
-#     k = np.zeros_like(hist_counts, dtype=np.float64)
-
-#     # Calcular P(k) e k médio para cada bin válido
-#     Pk[valid_bins] = hist_counts[valid_bins] / bin_counts[valid_bins]
-#     k[valid_bins] = np.histogram(keys, bins=bins, weights=keys)[0][valid_bins] / bin_counts[valid_bins]
-
-#     # Normalização de P(k) para garantir que ∑P(k) = 1
-#     Pk_sum = np.sum(Pk)
-#     if Pk_sum > 0:
-#         Pk /= Pk_sum
-
-    
-#     valid_values = (k > 0) & np.isfinite(k) & np.isfinite(Pk)
-#     k = k[valid_values]
-#     Pk = Pk[valid_values]
-    
-#     # Salvar se save=True
-#     if save:
-#         # Verifica se os argumentos necessários foram passados
-#         required_keys = ["N", "dim", "alpha_a", "alpha_g"]
-#         if not all(arg in kwargs for arg in required_keys):
-#             raise ValueError(f"Se save=True, os argumentos {required_keys} devem ser fornecidos.")
-
-#         # Obtém os valores das variáveis
-#         N = kwargs["N"]
-#         dim = kwargs["dim"]
-#         alpha_a = kwargs["alpha_a"]
-#         alpha_g = kwargs["alpha_g"]
-#         propertie = kwargs["propertie"]
-
-#         # Define o caminho do arquivo
-#         save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/{propertie}_distribution_log.csv"
-
-#         # Salva os dados
-#         if(propertie=="degree"):
-#             df = pd.DataFrame(data={"k": k, "pk": Pk})
-#         elif(propertie=="distances"):
-#             df = pd.DataFrame(data={"ds": k, "pds": Pk})
-#         df.to_csv(save_path, sep=' ', index=False)
-#         print(f"Arquivo salvo em {save_path}")
-
-#     return k, Pk
 
 def log_binning(counter_dict, bin_count, save=False, **kwargs):
     """Binagem logarítmica rápida."""
@@ -429,6 +354,40 @@ def log_binning(counter_dict, bin_count, save=False, **kwargs):
 
     return k, Pk
 
+def log_binning_distances(distances: np.ndarray[float], n_bins: int ,save: bool, **kwargs):
+    """Binagem logarítmica rápida.
+        distances[float]: list of all pair distances between nodes
+        n_bins[int]: number of bins in log-bing
+        save[bool]: if True, save in files, else, return ds, pds
+        kwargs[list[str]]: if save True, kwargs = ["N", "dim", "alpha_a", "alpha_g"]
+    """
+    # filtering of distances (ds > 10⁻⁶)
+    data_filt = distances[distances > 1e-6]
+    
+    bins = np.logspace(np.log10(min(data_filt)), np.log10(max(data_filt)), n_bins)
+    pdf, bin_edges = np.histogram(data_filt, bins = bins, density = True)
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    bin_widhs = bin_edges[1:] - bin_edges[:-1]
+    pdf = np.array(pdf) / sum(pdf)
+
+    # Salvar
+    if save:
+        required_keys = ["N", "dim", "alpha_a", "alpha_g"]
+        if not all(arg in kwargs for arg in required_keys):
+            raise ValueError(f"Se save=True, precisa de {required_keys}.")
+
+        N = kwargs["N"]
+        dim = kwargs["dim"]
+        alpha_a = kwargs["alpha_a"]
+        alpha_g = kwargs["alpha_g"]
+
+        save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/distances_distribution_log.csv"
+        columns = {"distances": ["ds", "pds"]}
+        df = pd.DataFrame({"ds": bin_widhs, "pds": pdf})
+        df.to_csv(save_path, sep=' ', index=False)
+        print(f"Arquivo salvo em {save_path}")
+
+    return bin_widhs, pdf
 
 def q(alpha_a, d):
     ration = alpha_a/d
@@ -872,10 +831,6 @@ def save_json_distributions(N: int, dim: list[int], alpha_a_v: list[float], alph
         alpha_a_v (list(float)): list of all values alpha_a (with alpha_g = 2.00)
         alpha_g_v (list(float)): list of all values alpha_g (with alpha_a = 2.00)
     """
-    import os
-    import pandas as pd
-    import numpy as np
-    import json
 
     alpha_ag_f = 2.0
 

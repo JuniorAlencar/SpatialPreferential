@@ -1,10 +1,10 @@
 {
     "comment": "use seed= -1 for random seed",
-    "num_vertices": 500,
-    "alpha_a": 8.0,
+    "num_vertices": 100000,
+    "alpha_a": 2.0,
     "alpha_g": 2.0,
     "r_min": 1,
     "r_max": 100000000,
-    "dim": 2,
+    "dim": 1,
     "seed": -1
     }

@@ -240,7 +240,7 @@ void SamuraI::writeGML(std::string fname){
          gzprintf(fi,"[\n");
          gzprintf(fi, "source (%d)\n", boost::source(e, G));
          gzprintf(fi, "target (%d)\n", boost::target(e, G));
-         gzprintf(fi, "distance %f\n", pow(Ruv.transpose() * Ruv, 0.5));
+         gzprintf(fi, "distance %.15f\n", pow(Ruv.transpose() * Ruv, 0.5));
          gzprintf(fi, "]\n");
      }
      gzprintf(fi,"]");
