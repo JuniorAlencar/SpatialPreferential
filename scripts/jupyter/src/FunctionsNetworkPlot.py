@@ -116,17 +116,17 @@ def draw_graph_subplots(ax, G, pos, title, row, col, adjust_limits=False):
     pos["cm"] = (x_cm, y_cm)  # Atualizar dicionário com a nova posição
 
     # Desenhar arestas primeiro
-    nx.draw_networkx_edges(G, pos, ax=ax, edge_color='#000000', alpha=0.7, width=0.8, style='solid')
+    nx.draw_networkx_edges(G, pos, ax=ax, edge_color='#000000', alpha=0.6, width=0.8, style='solid')
 
     # Desenhar nós com cores do degradê
-    nx.draw_networkx_nodes(G, pos, ax=ax, nodelist=node_list, node_size=100,
+    nx.draw_networkx_nodes(G, pos, ax=ax, nodelist=node_list, node_size=120,
                             node_color=node_colors, edgecolors='#000000', linewidths=0.8)
 
     # **Desenhar o centro de massa destacado**
-    nx.draw_networkx_nodes(G, pos, ax=ax, nodelist=["cm"], node_size=100, 
+    nx.draw_networkx_nodes(G, pos, ax=ax, nodelist=["cm"], node_size=120, 
                             node_color="red", edgecolors="black", linewidths=2.0)
 
-    ax.set_title(title, fontsize=17)
+    ax.set_title(title, fontsize=35, pad=15)
 
     # Ajustar os limites apenas para o primeiro subplot
     if adjust_limits:
@@ -138,31 +138,35 @@ def draw_graph_subplots(ax, G, pos, title, row, col, adjust_limits=False):
     ax.margins(0.1)
 
     # Restaurando os ticks corretamente
-    ax.set_xticks(np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], num=5))
-    ax.set_yticks(np.linspace(ax.get_ylim()[0], ax.get_ylim()[1], num=5))
+    ax.set_xticks(np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], num=3))
+    ax.set_yticks(np.linspace(ax.get_ylim()[0], ax.get_ylim()[1], num=4))
 
     # Exibir os rótulos dos eixos conforme especificado
     if col == 0:
-        ax.set_ylabel(r'$Y$', fontsize=19)
+        ax.set_ylabel(r'$Y$', fontsize=35)
     else:
         ax.set_ylabel("")
 
     if row == 2:
-        ax.set_xlabel(r'$X$', fontsize=19)
+        ax.set_xlabel(r'$X$', fontsize=35)
     else:
         ax.set_xlabel("")
     
     # **Forçar a exibição dos valores dos ticks**
-    ax.tick_params(axis='both', which='both', length=4.0, width=1.4, direction='in', labelsize=17,
-                   labelbottom=True, labelleft=True, pad=8.0)
+    ax.tick_params(axis='both', which='both', length=4.0, width=2.0, direction='in', labelsize=25,
+                   labelbottom=True, labelleft=True, pad=15.0)
 
     # **Garantir que os números dos ticks apareçam**
     for label in ax.get_xticklabels() + ax.get_yticklabels():
         label.set_visible(True)
     
+    for spine in ax.spines.values():
+        spine.set_linewidth(2.0)
+
     # **Remover completamente as grades**
     ax.grid(False)
 
+    
 # draw one single network of dimensions dimension = 1, 2 or 3
 def draw_graph(ax, G, pos, title, dim=2):
     """
