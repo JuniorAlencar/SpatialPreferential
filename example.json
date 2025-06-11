@@ -1,6 +1,6 @@
 {
     "comment": "use seed= -1 for random seed",
-    "num_vertices": 100000,
+    "num_vertices": 500,
     "alpha_a": 2.0,
     "alpha_g": 2.0,
     "r_min": 1,

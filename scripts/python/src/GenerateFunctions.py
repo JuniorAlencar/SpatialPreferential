@@ -2,7 +2,7 @@ import numpy as np
 import glob
 import os
 
-def ScriptGenerate(N,alpha_a,alpha_g,dim,NumSamples):
+def ScriptGenerate(N, alpha_a, alpha_g, dim, NumSamples):
     filename = f"N{N}_a{alpha_a:.2f}_g{alpha_g:.2f}_d{dim}.sh"
 
     a = "#!/bin/bash\n"
