@@ -87,7 +87,7 @@ class SamuraI {
     graph_t G; // the graph ...
 
     int m_num_vertices;
-    int m_num_edges;
+    
 
     double m_alpha_a; // attachment exponent
     double m_alpha_g; // grouth exponent

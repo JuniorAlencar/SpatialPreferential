@@ -221,16 +221,15 @@ void SamuraI::writeGML(std::string fname){
 	vertex_t v = i;
         gzprintf(fi, "node\n");
         gzprintf(fi, "[\n");
-        gzprintf(fi, "id (%d)\n", i);
-        gzprintf(fi, "label (%d)\n",i);
+        gzprintf(fi, "id %d\n", i);
+        gzprintf(fi, "label %d\n",i);
         gzprintf(fi, "graphics\n");
         gzprintf(fi, "[\n");
         gzprintf(fi, "x %f\n", pos[v](0));
         gzprintf(fi, "y %f\n", pos[v](1));
         gzprintf(fi, "z %f\n", pos[v](2));
-        gzprintf(fi, "q %f\n", pos[v](3));
-        gzprintf(fi, "degree %d\n", boost::degree(v,G));
         gzprintf(fi,"]\n");
+        gzprintf(fi, "degree %d\n", boost::degree(v,G));
         gzprintf(fi,"]\n");
     }
     
@@ -238,8 +237,8 @@ void SamuraI::writeGML(std::string fname){
          Vector4d Ruv = pos[boost::source(e, G)] - pos[boost::target(e, G)];
          gzprintf(fi,"edge\n");
          gzprintf(fi,"[\n");
-         gzprintf(fi, "source (%d)\n", boost::source(e, G));
-         gzprintf(fi, "target (%d)\n", boost::target(e, G));
+         gzprintf(fi, "source %d\n", boost::source(e, G));
+         gzprintf(fi, "target %d\n", boost::target(e, G));
          gzprintf(fi, "distance %.15f\n", pow(Ruv.transpose() * Ruv, 0.5));
          gzprintf(fi, "]\n");
      }
