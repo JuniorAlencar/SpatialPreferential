@@ -74,18 +74,18 @@ int main(int argc, char* argv[]) {
     S.createGraph();
     
     // // Navigator BFS (without coast)
-    // double l = S.computeGlobalNavigation().shortestpath;
-    // int d = S.computeGlobalNavigation().diamater;
+    double l = S.computeGlobalNavigation().shortestpath;
+    int d = S.computeGlobalNavigation().diamater;
 
-    // // Assortativity Coefficient
-    // double r = S.computeAssortativityCoefficient();
+    // Assortativity Coefficient
+    double r = S.computeAssortativityCoefficient();
     
-    // // Saving properties
-    // cout << prop_file << endl;
-    // ofstream pout(prop_file);
-    // pout << "#mean shortest path," << "# diamater," << "#assortativity coefficient\r\n";
-    // pout << l << "," << d << "," << r << endl;
-    // pout.close();
+    // Saving properties
+    cout << prop_file << endl;
+    ofstream pout(prop_file);
+    pout << "#mean shortest path," << "# diamater," << "#assortativity coefficient\r\n";
+    pout << l << "," << d << "," << r << endl;
+    pout.close();
 
     // // Navigator A* (with coast)
     // double l_coast = S.computeGlobalNavigation_Astar().shortestpath;
@@ -98,7 +98,7 @@ int main(int argc, char* argv[]) {
     // L_c << l_coast << "," << d_coast << endl;
     // L_c.close();
     
-    S.writeGML(gml_file);
+    // S.writeGML(gml_file);
 
 
     S.clear();
