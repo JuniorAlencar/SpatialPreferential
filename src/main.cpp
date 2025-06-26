@@ -73,14 +73,14 @@ int main(int argc, char* argv[]) {
     SamuraI S(xargs);
     S.createGraph();
     
-    // // Navigator BFS (without coast)
+    // Navigator BFS (without coast)
     // double l = S.computeGlobalNavigation().shortestpath;
     // int d = S.computeGlobalNavigation().diamater;
 
-    // Assortativity Coefficient
-    //double r = S.computeAssortativityCoefficient();
+    // // Assortativity Coefficient
+    // double r = S.computeAssortativityCoefficient();
     
-    // Saving properties
+    // // Saving properties
     // cout << prop_file << endl;
     // ofstream pout(prop_file);
     // pout << "#mean shortest path," << "# diamater," << "#assortativity coefficient\r\n";

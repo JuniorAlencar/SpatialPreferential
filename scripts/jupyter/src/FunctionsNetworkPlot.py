@@ -16,52 +16,60 @@ mpl.rcParams['axes.linewidth'] = 1.4 #set the value globally
 # Edges (list of tuples with connections) and
 # Positions (dictionary with tuple position 'node':(x,y,z)) 
 def positions_GML(N, dim, alpha_a, alpha_g, filename):
+    import gzip
+
     path = f"../../network/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/gml/"
     file = path + filename
-    
-    x,y,z = [],[],[]
-    source = []
-    target = []
-    
-    index = 0
-    with open(file, 'rb') as file_in:
-        lines = []
-        # decompress gzip
-        with gzip.GzipFile(fileobj=file_in, mode='rb') as gzip_file:
-            for line in gzip_file:
-                # decode file
-                decoded_line = line.decode('utf-8')
-                
-                # positions nodes
-                if(decoded_line[0]=="x"):
-                    x.append(float(line[1:-1]))
-                elif(decoded_line[0]=="y"):
-                    y.append(float(line[1:-1]))                    
-                elif(decoded_line[0]=="z"):
-                    z.append(float(line[1:-1])) 
-                              
-                
-                # edges nodes
 
-                # Append to buffer
-                lines.append(decoded_line) 
-                
-                if len(lines) >= 5:  # 1 (current line) + 2 (2 lines below) + 3 (3 lines below)
-                    # Check if the line 3 lines before the current line starts with 'edge'
-                    if lines[-4].startswith('edge'):
-                        # Lines 2 and 3 below the 'edge' line
-                        line_2_below = lines[-2]
-                        line_3_below = lines[-1]
-                        source.append('id_' + line_2_below.strip()[8:-1])
-                        target.append('id_' + line_3_below.strip()[8:-1])
-                        
-    
-    
     positions = {}
-    for i in range(len(x)):
-        positions[f'id_{i}'] = (x[i],y[i],z[i])
-    edges = [(i,j) for i,j in zip(source,target)]
+    edges = []
+    
+    with gzip.open(file, 'rt', encoding='utf-8') as f:
+        current_node_id = None
+        current_x = current_y = current_z = None
+        in_graphics = False
+        in_node = False
+        in_edge = False
+        current_source = current_target = None
+        
+        for line in f:
+            line = line.strip()
+            if line == "node":
+                in_node = True
+            elif line == "edge":
+                in_edge = True
+            elif line == "[":
+                continue
+            elif line == "]":
+                if in_node and current_node_id is not None:
+                    positions[f'id_{current_node_id}'] = (current_x, current_y, current_z)
+                    current_node_id = current_x = current_y = current_z = None
+                    in_node = False
+                elif in_edge and current_source is not None:
+                    edges.append((f'id_{current_source}', f'id_{current_target}'))
+                    current_source = current_target = None
+                    in_edge = False
+                in_graphics = False
+            elif in_node:
+                if line.startswith("id "):
+                    current_node_id = int(line.split()[1])
+                elif line == "graphics":
+                    in_graphics = True
+                elif in_graphics:
+                    if line.startswith("x "):
+                        current_x = float(line.split()[1])
+                    elif line.startswith("y "):
+                        current_y = float(line.split()[1])
+                    elif line.startswith("z "):
+                        current_z = float(line.split()[1])
+            elif in_edge:
+                if line.startswith("source "):
+                    current_source = int(line.split()[1])
+                elif line.startswith("target "):
+                    current_target = int(line.split()[1])
+    
     return edges, positions
+
 
 # Select one file .gml in specific folder (N, dim, alpha_a, alpha_g)
 # Return:
