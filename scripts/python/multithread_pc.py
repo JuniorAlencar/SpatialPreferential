@@ -19,21 +19,21 @@ import pandas as pd
 
 # N = 10**5
 # N_s = 600
-# N = 50000
-# N_s = 33
+N = 5000
+N_s = 300
 
-# dimensions = [1,2,3,4]
+dimensions = [1,2,3,4]
 
-# alpha_ag_f = 2.0
+alpha_ag_f = 2.0
 
-# centers_75 = [2.9, 6.9, 10.9, 12.3]
-# step = 0.1
-# n_side = 3  # número de valores para cada lado
+centers_75 = [3.07, 7.59, 12.01, 13.03]
+steps_75 = [3.0, 5.0, 7.0, 9.0]  # passo individual para cada centro
+n_side = 1  # número de valores para cada lado
 
-# alpha_A_75 = [
-#     [float(f"{x:.2f}") for x in np.linspace(c - n_side*step, c + n_side*step, 2*n_side + 1)]
-#     for c in centers_75
-# ]
+alpha_A_75 = [
+    [float(f"{x:.2f}") for x in np.linspace(c - n_side*step, c + n_side*step, 2*n_side + 1)]
+    for c, step in zip(centers_75, steps_75)
+]
 
 # centers_30 = [2.5, 5.50, 8.70, 10.7]
 # step = 0.1
@@ -55,31 +55,17 @@ import pandas as pd
 
 # # #n, dim, alpha_a, alpha_g
 
-# parms = {"N":[], "dim":[], "alpha_a":[], "alpha_g":[]}
-
-# #for n in N:
-# for i in range(len(dimensions)):
-#     alpha_a_v_5 = alpha_A_50[i]
-#     for aa in alpha_a_v_5:
-#         FunctionsFile.JsonGenerate(N, aa, alpha_ag_f, dimensions[i])
-#         parms["N"].append(N)
-#         parms["dim"].append(dimensions[i])
-#         parms["alpha_a"].append(aa)
-#         parms["alpha_g"].append(alpha_ag_f)
-
-N = 10*10**3
-N_s = 100
-dimensions = [1,2,3,4]
-alpha_ag_f = 2.0
-alpha_g_v = [i for i in np.arange(1.0, 10.0, 0.5)]
 parms = {"N":[], "dim":[], "alpha_a":[], "alpha_g":[]}
-for dim in dimensions:
-    for ag in alpha_g_v:
-        FunctionsFile.JsonGenerate(N, alpha_ag_f, ag, dim)
+
+#for n in N:
+for i in range(len(dimensions)):
+    alpha_a_v_5 = alpha_A_75[i]
+    for aa in alpha_a_v_5:
+        FunctionsFile.JsonGenerate(N, aa, alpha_ag_f, dimensions[i])
         parms["N"].append(N)
-        parms["dim"].append(dim)
-        parms["alpha_a"].append(alpha_ag_f)
-        parms["alpha_g"].append(ag)
+        parms["dim"].append(dimensions[i])
+        parms["alpha_a"].append(aa)
+        parms["alpha_g"].append(alpha_ag_f)
 
 df = pd.DataFrame(data=parms)
 df.to_csv("parameters.csv",sep=",")

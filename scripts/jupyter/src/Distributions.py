@@ -355,44 +355,46 @@ def distribution(degree, save=False, **kwargs):
         k_real (array): Valores de k após remoção de bins vazios.
         p_real (array): Distribuição normalizada de P(k).
     """
-    
-    hist, bins_edge = np.histogram(degree, bins=np.arange(0.5, 10**4 + 1.5, 1), density=True)
-    P = hist * np.diff(bins_edge)  # P(k) = densidade * delta k
-    K = bins_edge[:-1]  # Usamos o início dos bins como k representativo
-    
-    # Remover bins vazios (onde P(k) == 0)
-    valid = P > 0
-    k_real = K[valid]
-    p_real = P[valid]
+    try:
+        hist, bins_edge = np.histogram(degree, bins=np.arange(0.5, 10**4 + 1.5, 1), density=True)
+        P = hist * np.diff(bins_edge)  # P(k) = densidade * delta k
+        K = bins_edge[:-1]  # Usamos o início dos bins como k representativo
+        
+        # Remover bins vazios (onde P(k) == 0)
+        valid = P > 0
+        k_real = K[valid]
+        p_real = P[valid]
 
-    # Normalização para garantir que ∑P(k) = 1
-    P_sum = np.sum(p_real)
-    if P_sum > 0:
-        p_real /= P_sum
+        # Normalização para garantir que ∑P(k) = 1
+        P_sum = np.sum(p_real)
+        if P_sum > 0:
+            p_real /= P_sum
 
-    # Remover NaNs ou infinitos
-    valid_values = np.isfinite(k_real) & np.isfinite(p_real)
-    k_real = k_real[valid_values]
-    p_real = p_real[valid_values]
+        # Remover NaNs ou infinitos
+        valid_values = np.isfinite(k_real) & np.isfinite(p_real)
+        k_real = k_real[valid_values]
+        p_real = p_real[valid_values]
 
-    # Se save=True, salvar os dados
-    if save:
-        required_keys = ["N", "dim", "alpha_a", "alpha_g"]
-        if not all(arg in kwargs for arg in required_keys):
-            raise ValueError(f"Se save=True, os argumentos {required_keys} devem ser fornecidos.")
+        # Se save=True, salvar os dados
+        if save:
+            required_keys = ["N", "dim", "alpha_a", "alpha_g"]
+            if not all(arg in kwargs for arg in required_keys):
+                raise ValueError(f"Se save=True, os argumentos {required_keys} devem ser fornecidos.")
 
-        # Obtém os valores das variáveis
-        N, dim, alpha_a, alpha_g = kwargs["N"], kwargs["dim"], kwargs["alpha_a"], kwargs["alpha_g"]
+            # Obtém os valores das variáveis
+            N, dim, alpha_a, alpha_g = kwargs["N"], kwargs["dim"], kwargs["alpha_a"], kwargs["alpha_g"]
 
-        # Define o caminho do arquivo
-        save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/degree_distribution_linear.csv"
+            # Define o caminho do arquivo
+            save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/degree_distribution_linear.csv"
 
-        # Salva os dados
-        df = pd.DataFrame(data={"k": k_real, "pk": p_real})
-        df.to_csv(save_path, sep=' ', index=False)
-        print(f"Arquivo salvo em {save_path}")
+            # Salva os dados
+            df = pd.DataFrame(data={"k": k_real, "pk": p_real})
+            df.to_csv(save_path, sep=' ', index=False)
+            print(f"Arquivo salvo em {save_path}")
 
-    return k_real, p_real
+        return k_real, p_real
+    except FileNotFoundError:
+        return "not file in"
 
 # distribution: distribution (N_k/N)
 # return(p_cum): cumulative distribution
@@ -406,55 +408,59 @@ def cumulative_distribution(distribution):
 
 def log_binning(counter_dict, bin_count, save=False, **kwargs):
     """Binagem logarítmica rápida."""
+    try:
+        keys = np.array(list(counter_dict.keys()), dtype=np.float64)
+        values = np.array(list(counter_dict.values()), dtype=np.float64)
 
-    keys = np.array(list(counter_dict.keys()), dtype=np.float64)
-    values = np.array(list(counter_dict.values()), dtype=np.float64)
+        # Filtrar k > 0
+        mask = keys > 0
+        keys = keys[mask]
+        values = values[mask]
 
-    # Filtrar k > 0
-    mask = keys > 0
-    keys = keys[mask]
-    values = values[mask]
+        min_x = np.log10(np.min(keys))
+        max_x = np.log10(np.max(keys))
+        bins = np.logspace(min_x, max_x, num=bin_count)
 
-    min_x = np.log10(np.min(keys))
-    max_x = np.log10(np.max(keys))
-    bins = np.logspace(min_x, max_x, num=bin_count)
+        # Histogramas
+        hist_counts, _ = np.histogram(keys, bins=bins, weights=values)
+        bin_counts, _ = np.histogram(keys, bins=bins)
+        sum_k, _ = np.histogram(keys, bins=bins, weights=keys)
 
-    # Histogramas
-    hist_counts, _ = np.histogram(keys, bins=bins, weights=values)
-    bin_counts, _ = np.histogram(keys, bins=bins)
-    sum_k, _ = np.histogram(keys, bins=bins, weights=keys)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            Pk = hist_counts / bin_counts
+            k = sum_k / bin_counts
 
-    with np.errstate(divide='ignore', invalid='ignore'):
-        Pk = hist_counts / bin_counts
-        k = sum_k / bin_counts
+        # Remover bins inválidos
+        valid = (bin_counts > 0) & (k > 0) & np.isfinite(k) & np.isfinite(Pk)
+        k = k[valid]
+        Pk = Pk[valid]
 
-    # Remover bins inválidos
-    valid = (bin_counts > 0) & (k > 0) & np.isfinite(k) & np.isfinite(Pk)
-    k = k[valid]
-    Pk = Pk[valid]
-
-    # Normalizar P(k)
-    Pk_sum = np.sum(Pk)
-    if Pk_sum > 0:
-        Pk /= Pk_sum
-
-    # Salvar
-    if save:
-        required_keys = ["N", "dim", "alpha_a", "alpha_g"]
-        if not all(arg in kwargs for arg in required_keys):
-            raise ValueError(f"Se save=True, precisa de {required_keys}.")
-
-        N = kwargs["N"]
-        dim = kwargs["dim"]
-        alpha_a = kwargs["alpha_a"]
-        alpha_g = kwargs["alpha_g"]
+        # Normalizar P(k)
+        Pk_sum = np.sum(Pk)
+        if Pk_sum > 0:
+            Pk /= Pk_sum
         
-        save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/degree_distribution_log.csv"
-        df = pd.DataFrame({"k": k, "pk": Pk})
-        df.to_csv(save_path, sep=' ', index=False)
-        print(f"Arquivo salvo em {save_path}")
+            # Salvar
+            if save:
+                required_keys = ["N", "dim", "alpha_a", "alpha_g"]
+                if not all(arg in kwargs for arg in required_keys):
+                    raise ValueError(f"Se save=True, precisa de {required_keys}.")
 
-    return k, Pk
+                N = kwargs["N"]
+                dim = kwargs["dim"]
+                alpha_a = kwargs["alpha_a"]
+                alpha_g = kwargs["alpha_g"]
+                
+                save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/degree_distribution_log.csv"
+                df = pd.DataFrame({"k": k, "pk": Pk})
+                df.to_csv(save_path, sep=' ', index=False)
+                print(f"Arquivo salvo em {save_path}")
+    
+    except FileNotFoundError:
+        print("Not file in")
+    
+    except ValueError:
+        print("ignore thist file")
 
 def log_binning_distances(distances: np.ndarray[float], n_bins: int ,save: bool, **kwargs):
     """Binagem logarítmica rápida.
@@ -463,34 +469,38 @@ def log_binning_distances(distances: np.ndarray[float], n_bins: int ,save: bool,
         save[bool]: if True, save in files, else, return ds, pds
         kwargs[list[str]]: if save True, kwargs = ["N", "dim", "alpha_a", "alpha_g"]
     """
-    # filtering of distances (ds > 10⁻⁶)
-    data_filt = distances[distances > 1e-6]
-    
-    bins = np.logspace(np.log10(min(data_filt)), np.log10(max(data_filt)), n_bins)
-    pdf, bin_edges = np.histogram(data_filt, bins = bins, density = True)
-    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
-    bin_widhs = bin_edges[1:] - bin_edges[:-1]
-    pdf = np.array(pdf) / sum(pdf)
+    try:
+        # filtering of distances (ds > 10⁻⁶)
+        data_filt = distances[distances > 1e-6]
+        
+        bins = np.logspace(np.log10(min(data_filt)), np.log10(max(data_filt)), n_bins)
+        pdf, bin_edges = np.histogram(data_filt, bins = bins, density = True)
+        bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+        bin_widhs = bin_edges[1:] - bin_edges[:-1]
+        pdf = np.array(pdf) / sum(pdf)
 
-    # Salvar
-    if save:
-        required_keys = ["N", "dim", "alpha_a", "alpha_g"]
-        if not all(arg in kwargs for arg in required_keys):
-            raise ValueError(f"Se save=True, precisa de {required_keys}.")
+        # Salvar
+        if save:
+            required_keys = ["N", "dim", "alpha_a", "alpha_g"]
+            if not all(arg in kwargs for arg in required_keys):
+                raise ValueError(f"Se save=True, precisa de {required_keys}.")
 
-        N = kwargs["N"]
-        dim = kwargs["dim"]
-        alpha_a = kwargs["alpha_a"]
-        alpha_g = kwargs["alpha_g"]
+            N = kwargs["N"]
+            dim = kwargs["dim"]
+            alpha_a = kwargs["alpha_a"]
+            alpha_g = kwargs["alpha_g"]
 
-        save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/distances_distribution_log.csv"
-        columns = {"distances": ["ds", "pds"]}
-        df = pd.DataFrame({"ds": bin_widhs, "pds": pdf})
-        df.to_csv(save_path, sep=' ', index=False)
-        print(f"Arquivo salvo em {save_path}")
+            save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/distances_distribution_log.csv"
+            columns = {"distances": ["ds", "pds"]}
+            df = pd.DataFrame({"ds": bin_widhs, "pds": pdf})
+            df.to_csv(save_path, sep=' ', index=False)
+            print(f"Arquivo salvo em {save_path}")
 
-    return bin_widhs, pdf
-
+        return bin_widhs, pdf
+    except ValueError:
+        return "ignore this file"
+    except FileNotFoundError:
+        return "not file in"
 def q(alpha_a, d):
     ration = alpha_a/d
     if(0<=ration<=1):
