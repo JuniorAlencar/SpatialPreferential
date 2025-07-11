@@ -12,6 +12,21 @@ from scipy.optimize import curve_fit
 from scipy.stats import kstest
 
 
+# create folder to results
+def make_results_folders():
+    path = "../../results"
+    # If file in all_files, create check_folder to move files
+    if not os.path.exists(path):
+        os.makedirs(path)
+        os.makedirs(path + "/alpha_a")
+        os.makedirs(path + "/alpha_g")
+        os.makedirs(path + "/N")
+        os.makedirs(path + "/distributions")
+        os.makedirs(path + "/network")
+        os.makedirs(path + "/parameters")
+    else:
+        pass
+
 # N: number of nodes
 # d: dimension
 # alpha_a:.2f: parameter for preferential attrachment
