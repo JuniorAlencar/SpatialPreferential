@@ -34,11 +34,17 @@ struct samargs {
     double alpha_a;
     double alpha_g;
     int seed;
+    int m0;
 };
 
 struct Navigation{
-    int diamater;
-    double shortestpath;
+    // WITH COST
+    int diamater_BFS;
+    double shortestpath_BFS;
+    
+    //  WITHOUT COST
+    int diamater_WEIGHT;
+    double shortestpath_WEIGHT;
 };
 
 typedef adjacency_list<vecS, vecS, undirectedS, property<vertex_degree_t, int>>
@@ -94,6 +100,9 @@ class SamuraI {
     double m_r_min;   // minimum distance for placing particles
     double m_r_max;   // maximum distance for placing particles
     int m_dim;        // bin/ system dimension (1-4)
+    int m_seed;       // SEED
+    int m_m0;         // Number of connections of new node
+
 
     std::vector<Vector4d> pos;  // vector with positions
     Vector4d center_of_mass;    // vector with center of mass
@@ -101,12 +110,12 @@ class SamuraI {
     //std::vector<float> r;       // vector with r gen for power law
 
     void CreateNetwork();
-    int m_seed;
+    
 
   public:
     SamuraI(const samargs& xargs)
         : m_num_vertices(xargs.num_vertices), m_alpha_a(xargs.alpha_a), m_alpha_g(xargs.alpha_g),
-          m_r_min(xargs.r_min), m_r_max(xargs.r_max), m_dim(xargs.dim), m_seed(xargs.seed) {}
+          m_r_min(xargs.r_min), m_r_max(xargs.r_max), m_dim(xargs.dim), m_seed(xargs.seed), m_m0(xargs.m0) {}
 
     inline void createGraph() {
         assert(m_num_vertices > 0);

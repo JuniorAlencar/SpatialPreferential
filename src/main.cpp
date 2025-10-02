@@ -30,6 +30,7 @@ samargs read_parametes(const string& fname) {
     xargs.r_max = data.value("r_max", 1e7);
     xargs.dim = data.value("dim", 3);
     xargs.seed = data.value("seed", 1234);
+    xargs.m0 = data.value("m0", 1);
     
     if (xargs.seed < 0) {
         // std::time_t now = std::time(0);
@@ -56,7 +57,7 @@ int main(int argc, char* argv[]) {
 
     // set filenames
     char n_folder[50], alpha_folder[160], gml_folder[170], prop_folder[170], prop_file[200], gml_file[200], L_coast_file[200] ,time_process_file[200];
-    sprintf(n_folder, "./N_%d", xargs.num_vertices);    
+    sprintf(n_folder, "./N_%d/m0_%d", xargs.num_vertices, xargs.m0);
     sprintf(alpha_folder, "%s/dim_%d/alpha_a_%1.2f_alpha_g_%1.2f", n_folder, xargs.dim, xargs.alpha_a, xargs.alpha_g);
     sprintf(gml_folder, "%s/gml", alpha_folder);
     sprintf(prop_folder, "%s/prop", alpha_folder);
@@ -74,18 +75,18 @@ int main(int argc, char* argv[]) {
     S.createGraph();
     
     // Navigator BFS (without coast)
-    double l = S.computeGlobalNavigation().shortestpath;
-    int d = S.computeGlobalNavigation().diamater;
+    // double l = S.computeGlobalNavigation().shortestpath;
+    // int d = S.computeGlobalNavigation().diamater;
 
-    // Assortativity Coefficient
-    double r = S.computeAssortativityCoefficient();
+    // // Assortativity Coefficient
+    // double r = S.computeAssortativityCoefficient();
     
-    // Saving properties
-    cout << prop_file << endl;
-    ofstream pout(prop_file);
-    pout << "#mean shortest path," << "# diamater," << "#assortativity coefficient\r\n";
-    pout << l << "," << d << "," << r << endl;
-    pout.close();
+    // // Saving properties
+    // cout << prop_file << endl;
+    // ofstream pout(prop_file);
+    // pout << "#mean shortest path," << "# diamater," << "#assortativity coefficient\r\n";
+    // pout << l << "," << d << "," << r << endl;
+    // pout.close();
 
     // // Navigator A* (with coast)
     // double l_coast = S.computeGlobalNavigation_Astar().shortestpath;

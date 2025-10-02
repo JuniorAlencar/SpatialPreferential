@@ -3,30 +3,29 @@ import glob
 import os
 import pandas as pd
 import re
+import json
+from pathlib import Path
 
-def JsonGenerate(N, alpha_a,alpha_g,dim):
-    filename = f"N{N}_a{alpha_a:.2f}_g{alpha_g:.2f}_d{dim}.json"
-    a = "{\n"
-    b = "\"comment\": \"use seed= -1 for random seed\",\n"
-    c = f"\"num_vertices\": {N},\n"
-    d = f"\"alpha_a\": {alpha_a:.6f},\n"
-    e = f"\"alpha_g\": {alpha_g:.6f},\n"
-    f = "\"r_min\": 1,\n"
-    g = "\"r_max\": 10000000,\n"
-    h = f"\"dim\": {dim},\n"
-    i = "\"seed\": -1\n"
-    j = "}"
-    
-    newpath = f"../../parms_pc_{N}/"
-    if not os.path.exists(newpath):
-        os.makedirs(newpath)
-    
-    list_for_loop = [a,b,c,d,e,f,g,h,i,j]
-    x = open(newpath + filename, "w")
+def JsonGenerate(N, alpha_a, alpha_g, dim, m0):
+    filename = f"N{N}_a{alpha_a:.2f}_g{alpha_g:.2f}_d{dim}_m0_{m0}.json"
+    outdir = Path(f"../../parms_pc_{N}")
+    outdir.mkdir(parents=True, exist_ok=True)
+    path = outdir / filename
 
-    for k in list_for_loop:
-        x.write(k)
-    x.close()
+    data = {
+        "comment": "use seed= -1 for random seed",
+        "num_vertices": N,
+        "alpha_a": float(f"{alpha_a:.6f}"),
+        "alpha_g": float(f"{alpha_g:.6f}"),
+        "r_min": 1,
+        "r_max": 10000000,
+        "dim": dim,
+        "seed": -1,
+        "m0": m0,
+    }
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
 def multithread_pc(N, NumSamples):
     filename = f"N_{N}_multithread_pc.sh"

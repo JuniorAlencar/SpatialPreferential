@@ -16,59 +16,130 @@ inline bool cmp(vertex_prop_double p1, vertex_prop_double p2) { return p1.second
 
 void SamuraI::CreateNetwork(){
     hrand rnd(m_seed);
-    Vector4d p(0.0, 0.0, 0.0, 0.0);
-    boost::add_edge(0, 1, G);
-    boost::add_vertex(G);
-    
-    pos.push_back(p);
-    
-    for(int i=1; i < m_num_vertices; i++){
-        double radius;
-        Vector4d dp;
-        // generate a inverse power law distance
-        radius = rnd.inv_power_law_distributed(m_r_min, m_r_max, m_alpha_g);
-        // generate dX point...
-        dp = rnd.uniform_hypersphere(m_dim);
-        
-        p = center_of_mass + radius * dp;
-        sum_positions += p;
-        center_of_mass = sum_positions / (i + 1);
-        boost::add_vertex(G);
+    const int m0 = m_m0; // >= 1
+    if (m0 < 1) throw std::runtime_error("m_m0 deve ser >= 1");
+    if (m_num_vertices < m0 + 1)
+        throw std::runtime_error("Para grau minimo m0, exija m_num_vertices >= m0 + 1");
+
+    // Opcional: limpar estado, se necessário no seu contexto
+    // G.clear(); pos.clear();
+    // sum_positions.setZero(); center_of_mass.setZero();
+
+    auto add_pos = [&](int i){
+        double radius = rnd.inv_power_law_distributed(m_r_min, m_r_max, m_alpha_g); // ~ r^{-alpha_G}
+        Vector4d dp   = rnd.uniform_hypersphere(m_dim);
+        Vector4d p    = center_of_mass + radius * dp;
         pos.push_back(p);
-        
-        if(i>1){        
-        
+        sum_positions += p;
+        center_of_mass = sum_positions / double(i + 1);
+    };
+
+    // =========
+    // 1) Núcleo inicial: clique K_{m0+1}
+    //    -> cada vértice começa com grau exatamente m0.
+    // =========
+    const int m_init = m0 + 1;
+
+    for (int i = 0; i < m_init; ++i){
+        boost::add_vertex(G);
+        add_pos(i);
+    }
+    // Conecta todos os pares (clique completo)
+    for (int u = 0; u < m_init; ++u){
+        for (int v = u + 1; v < m_init; ++v){
+            // se seu tipo de grafo permitir multi-arestas, proteja:
+            if (!boost::edge(u, v, G).second) boost::add_edge(u, v, G);
+        }
+    }
+    // Até aqui: todos os vértices têm grau == m0
+
+    // =========
+    // 2) Crescimento: cada novo vértice faz m0 conexões distintas
+    // =========
+    for (int i = m_init; i < m_num_vertices; ++i){
+        boost::add_vertex(G);
+        add_pos(i);
         vertex_t New = i;
-        std::vector<vertex_prop_double> prob;
-        double exponent = -0.5 * m_alpha_a;
-        double p_total = 0.0;
-        
-        for (int u=0;u<i;u++){
+
+        // cada novo vértice nasce com exatamente m0 arestas
+        const int links_to_add = m0;
+
+        std::unordered_set<vertex_t> chosen;
+        chosen.reserve(links_to_add);
+
+        for (int ell = 0; ell < links_to_add; ++ell){
+            // Recalcula pesos com graus atualizados e evitando alvos já escolhidos
+            std::vector<vertex_prop_double> prob; // pair<vertex, weight>
+            prob.reserve(static_cast<size_t>(i));
+            const double exponent = -0.5 * m_alpha_a; // (r^2)^{-alpha_a/2} = r^{-alpha_a}
+            double p_total = 0.0;
+
+            for (int u = 0; u < i; ++u){
                 vertex_t v = u;
-                int k_v = boost::degree(v, G);
-                Vector4d Ruv = pos[v] - p;
-                //std::cout << "dist:" << Ruv << std::endl;
+                if (chosen.count(v)) continue; // sem duplicata de alvo
+
+                int k_v = static_cast<int>(boost::degree(v, G));
+                Vector4d Ruv = pos[v] - pos[New];
                 double Ruv_SQ = Ruv.transpose() * Ruv;
-                //std::cout << "Ruv_SQ:" << Ruv_SQ << std::endl;
-                double Pv = k_v * pow(Ruv_SQ, exponent);
-                //std::cout << Pv << std::endl;
-                p_total += Pv;
-                prob.push_back(std::make_pair(v, Pv));
-                //std::cout << "Pv:" << Pv << "," << "v:" << v << std::endl;
+                if (Ruv_SQ <= 0.0) Ruv_SQ = std::numeric_limits<double>::min(); // guarda numérico
+
+                double w = static_cast<double>(k_v) * std::pow(Ruv_SQ, exponent);
+                // se quiser um piso para evitar "sumir" alvos com k_v=0 (não ocorre aqui):
+                // if (w <= 0) w = 0;
+                p_total += w;
+                prob.emplace_back(v, w);
+            }
+
+            // fallback robusto (patológico): se não houver pesos válidos, conecte aleatório distinto
+            if (p_total <= 0.0 || prob.empty()){
+                int trials = 0;
+                while (trials++ < 1000){
+                    int v = rnd.uniform_int(0, i - 1);
+                    if (!chosen.count(v) && !boost::edge(v, New, G).second){
+                        boost::add_edge(v, New, G);
+                        chosen.insert(v);
+                        break;
+                    }
                 }
-            
-        // normalize, cumpute cumsum and pick
-        double r = rnd.uniform_real(0.0, 1.0);
-        double cumsum = 0;
-        for (size_t i = 0; i < prob.size(); ++i) {
-            prob[i].second /= p_total; // normalizar
-            cumsum += prob[i].second;
-            //std::cout << "cumu:" << cumsum << std::endl;
-            if (cumsum > r){
-                boost::add_edge(prob[i].first, New, G);
-                break;
+                continue;
+            }
+
+            // amostragem por cumsum
+            double r = rnd.uniform_real(0.0, 1.0);
+            double cumsum = 0.0;
+            for (auto &pr : prob){
+                pr.second /= p_total; // normaliza
+                cumsum += pr.second;
+                if (cumsum > r){
+                    vertex_t vstar = pr.first;
+                    if (!boost::edge(vstar, New, G).second){
+                        boost::add_edge(vstar, New, G);
+                        chosen.insert(vstar);
+                    } else {
+                        // em grafos que não aceitam multi-arestas, tente outro (proteção extra)
+                        // procura o primeiro não escolhido e sem aresta
+                        for (auto &alt : prob){
+                            if (!chosen.count(alt.first) && !boost::edge(alt.first, New, G).second){
+                                boost::add_edge(alt.first, New, G);
+                                chosen.insert(alt.first);
+                                break;
+                            }
+                        }
+                    }
+                    break;
                 }
             }
+        }
+        // Agora: deg(New) == m0; vértices antigos mantêm deg >= m0 (nunca diminuem).
+    }
+
+//    (Opcional) verificação final em debug:
+    for (int v = 0; v < m_num_vertices; ++v){
+        using degree_size_t = boost::graph_traits<decltype(G)>::degree_size_type;
+
+        degree_size_t deg = boost::degree(v, G);
+        if (deg < static_cast<degree_size_t>(m0)) {
+            throw std::runtime_error("Grau < m0 detectado (inconsistência na construção).");
         }
     }
 }
@@ -78,7 +149,7 @@ Navigation SamuraI::computeGlobalNavigation(){
 
     double meanShortestPath = 0;
     //int count = 0;
-    std::vector<int> d(m_num_vertices,0);  // vector for diamater
+    std::vector<int> d(m_num_vertices, 0);  // vector for diamater
     int aux = 0;                           // auxiliary value for the diameter
     
     for(auto u : boost::make_iterator_range(vertices(G))){
@@ -100,11 +171,12 @@ Navigation SamuraI::computeGlobalNavigation(){
     double count = num_vertices(G)*(num_vertices(G)-1);
     meanShortestPath /= count;
     
-    BFS.shortestpath = meanShortestPath;
-    BFS.diamater = dia;
+    BFS.shortestpath_BFS = meanShortestPath;
+    BFS.diamater_BFS = dia;
     
     return BFS;
 }
+
 
 double SamuraI::computeAssortativityCoefficient() {
     int NE = num_vertices(G)-1;   // Total number of degree network
@@ -172,13 +244,10 @@ Navigation SamuraI::computeGlobalNavigation_Astar() {
     double count = static_cast<double>(num_vertices(G)) * (num_vertices(G) - 1);
     meanShortestPath /= count;
 
-    AStar.shortestpath = meanShortestPath;
-    AStar.diamater = static_cast<int>(*std::max_element(d.begin(), d.end()));
+    AStar.shortestpath_WEIGHT = meanShortestPath;
+    AStar.diamater_WEIGHT = static_cast<int>(*std::max_element(d.begin(), d.end()));
     return AStar;
 }
-
-
-
 
 
 void SamuraI::writeDegrees(std::string fname){
