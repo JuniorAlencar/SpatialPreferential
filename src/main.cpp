@@ -75,7 +75,8 @@ int main(int argc, char* argv[]) {
     S.createGraph();
     
     // // Assortativity Coefficient
-    double r = S.computeAssortativityCoefficient();
+    double r_newman = S.computeAssortativityCoefficientNewman();
+    double r_spearman = S.computeRankAssortativitySpearman();
     // double C = S.computeClusterCoefficient();
     // // Navigator A* (with coast)
     // double l_coast = S.computeGlobalNavigation_Astar().shortestpath;
@@ -88,7 +89,7 @@ int main(int argc, char* argv[]) {
     // pout << "#mean shortest path," << "# diamater," << "#assortativity coefficient\r\n";
     // pout << l << "," << d << "," << r << endl;
     // pout.close();
-    cout << r << endl;
+    cout << r_newman << " "<< r_spearman <<endl;
     
 
     

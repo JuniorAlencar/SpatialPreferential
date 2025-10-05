@@ -10,14 +10,16 @@
 #include <boost/graph/properties.hpp>
 #include <boost/pending/property.hpp>
 #include <boost/graph/astar_search.hpp>
-#include <boost/graph/graph_traits.hpp>
 #include <boost/graph/properties.hpp>
 #include <boost/graph/visitors.hpp>
 #include <boost/graph/exterior_property.hpp>
 #include <boost/graph/clustering_coefficient.hpp>
 #include <limits>
 #include <cmath>
-
+#include <algorithm>
+#include <numeric>
+#include <unordered_map>
+#include <boost/range/iterator_range.hpp>
 #include <boost/property_map/property_map.hpp>
 
 #include <cassert>
@@ -47,6 +49,11 @@ struct Navigation{
     //  WITHOUT COST
     int diamater_WEIGHT;
     double shortestpath_WEIGHT;
+};
+
+struct Assortativity{
+    double R_Newman;
+    double R_spearman;
 };
 
 typedef adjacency_list<vecS, vecS, undirectedS, property<vertex_degree_t, int>>
@@ -133,9 +140,11 @@ class SamuraI {
     void writeConnections(std::string fname);
 	Navigation computeGlobalNavigation(void);
     void writeGML(std::string fname);
-    double computeAssortativityCoefficient(void);
     Navigation computeGlobalNavigation_Astar(void);
     double computeClusterCoefficient(void);
+
+    double computeAssortativityCoefficientNewman(void);
+    double computeRankAssortativitySpearman(void);
     //void writeR(std::string fname);
     
     void clear();

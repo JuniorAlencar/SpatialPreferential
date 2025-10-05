@@ -191,7 +191,7 @@ double SamuraI::computeClusterCoefficient() {
 }
 
 
-double SamuraI::computeAssortativityCoefficient() {
+double SamuraI::computeAssortativityCoefficientNewman() {
     const double M = static_cast<double>(boost::num_edges(G)); // número de arestas reais
 
     double T1 = 0.0, T2 = 0.0, T3 = 0.0;
@@ -217,6 +217,97 @@ double SamuraI::computeAssortativityCoefficient() {
     return R;
 }
 
+
+static std::vector<double> compute_ranks_average_ties(const std::vector<double>& vals) {
+    int n = (int)vals.size();
+    std::vector<int> idx(n);
+    std::iota(idx.begin(), idx.end(), 0);
+    // ordenar índices por valor correspondente
+    std::sort(idx.begin(), idx.end(), [&](int a, int b){
+        return vals[a] < vals[b];
+    });
+
+    std::vector<double> ranks(n);
+    int i = 0;
+    while (i < n) {
+        int j = i + 1;
+        while (j < n && vals[idx[j]] == vals[idx[i]]) ++j;
+        // valores iguais do i..j-1 -> atribuir rank médio (1-based)
+        double rank_sum = 0.0;
+        for (int t = i; t < j; ++t) rank_sum += (t + 1); // ranks 1..n
+        double avg_rank = rank_sum / double(j - i);
+        for (int t = i; t < j; ++t) ranks[idx[t]] = avg_rank;
+        i = j;
+    }
+    return ranks;
+}
+
+// Calcula correlação Pearson de dois vetores (mesmo tamanho). Retorna NaN se inválido.
+static double pearson_correlation(const std::vector<double>& x, const std::vector<double>& y) {
+    int n = (int)x.size();
+    if (n == 0 || (int)y.size() != n) return std::numeric_limits<double>::quiet_NaN();
+    double mean_x = 0.0, mean_y = 0.0;
+    for (int i = 0; i < n; ++i) { mean_x += x[i]; mean_y += y[i]; }
+    mean_x /= n; mean_y /= n;
+    double num = 0.0, sx = 0.0, sy = 0.0;
+    for (int i = 0; i < n; ++i) {
+        double dx = x[i] - mean_x;
+        double dy = y[i] - mean_y;
+        num += dx * dy;
+        sx += dx * dx;
+        sy += dy * dy;
+    }
+    double denom = std::sqrt(sx * sy);
+    if (denom <= 0.0) return std::numeric_limits<double>::quiet_NaN();
+    return num / denom;
+}
+
+// Método a adicionar na sua classe (ajuste o tipo de G conforme seu grafo)
+double SamuraI::computeRankAssortativitySpearman() {
+        
+    using boost::make_iterator_range;
+
+    // colecione pares de graus (um par por aresta)
+    std::vector<double> deg_u_list;
+    std::vector<double> deg_v_list;
+    deg_u_list.reserve(boost::num_edges(G));
+    deg_v_list.reserve(boost::num_edges(G));
+
+    for (auto e : make_iterator_range(boost::edges(G))) {
+        auto u = boost::source(e, G);
+        auto v = boost::target(e, G);
+        if (u == v) continue; // ignorar self-loops, se existirem
+        double ku = static_cast<double>(boost::degree(u, G));
+        double kv = static_cast<double>(boost::degree(v, G));
+        deg_u_list.push_back(ku);
+        deg_v_list.push_back(kv);
+    }
+
+    int M = (int)deg_u_list.size();
+    if (M == 0) return 0.0;
+
+    // criamos vetores de todos os valores que serão ranqueados separadamente:
+    // Para Spearman clássico, os ranks devem ser obtidos sobre cada conjunto separadamente?
+    // Não — ranqueamos *globalmente* cada componente separadamente. Isto é:
+    // - ranks para deg_u_list (cada entrada corresponde a uma extremidade "u" da aresta)
+    // - ranks para deg_v_list (cada entrada corresponde a uma extremidade "v")
+    //
+    // Uma alternativa comum é ranquear os graus de TODOS os nós (não por aresta). 
+    // Aqui faremos a versão por aresta (rankeando os vetores deg_u_list e deg_v_list) 
+    // que é consistente com cálculo de Spearman entre as extremidades.
+    std::vector<double> ranks_u = compute_ranks_average_ties(deg_u_list);
+    std::vector<double> ranks_v = compute_ranks_average_ties(deg_v_list);
+
+    // agora a correlação de Pearson entre os ranks é o Spearman rho
+    double rho = pearson_correlation(ranks_u, ranks_v);
+
+    // proteção numérica / limites
+    if (std::isnan(rho)) return 0.0;
+    if (rho > 1.0 && rho < 1.0 + 1e-12) rho = 1.0;
+    if (rho < -1.0 && rho > -1.0 - 1e-12) rho = -1.0;
+    
+    return rho;
+}
 
 Navigation SamuraI::computeGlobalNavigation_Astar() {
     Navigation AStar;
