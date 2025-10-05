@@ -13,6 +13,8 @@
 #include <boost/graph/graph_traits.hpp>
 #include <boost/graph/properties.hpp>
 #include <boost/graph/visitors.hpp>
+#include <boost/graph/exterior_property.hpp>
+#include <boost/graph/clustering_coefficient.hpp>
 #include <limits>
 #include <cmath>
 
@@ -57,6 +59,10 @@ typedef std::pair<vertex_t, double> vertex_prop_double;
 
 typedef graph_traits<graph_t>::vertex_iterator vertex_it;
 typedef graph_traits<graph_t>::edge_iterator edge_it;
+
+// Tipos corretos para clustering
+typedef std::vector<float> ClusteringContainer;
+typedef boost::iterator_property_map<ClusteringContainer::iterator, property_map<graph_t, vertex_index_t>::const_type> ClusteringMap;
 
 
 template <class Graph, class CostType>
@@ -129,6 +135,7 @@ class SamuraI {
     void writeGML(std::string fname);
     double computeAssortativityCoefficient(void);
     Navigation computeGlobalNavigation_Astar(void);
+    double computeClusterCoefficient(void);
     //void writeR(std::string fname);
     
     void clear();

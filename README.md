@@ -24,6 +24,33 @@ A BFS (Breadth First Search) algorithm was implemented to calculate the shortest
 
 - zlib library
 
+
+# To install *cmake* (linux ubuntu)
+```bash
+sudo apt install cmake  
+```
+
+# To install *nlohmann* (linux ubuntu)
+```bash
+sudo apt install nlohmann-json3-dev  
+```
+
+# To install *boost* (linux ubuntu)
+```bash
+sudo apt install libboost-all-dev  
+```
+
+# To install *eigen3* (linux ubuntu)
+```bash
+sudo apt install libeigen3-dev  
+```
+
+# To install *zlib* (linux ubuntu)
+```bash
+sudo apt install zlib1g-dev
+```
+
+
 ## Running code
 ```bash
 

@@ -74,30 +74,23 @@ int main(int argc, char* argv[]) {
     SamuraI S(xargs);
     S.createGraph();
     
-    // Navigator BFS (without coast)
-    // double l = S.computeGlobalNavigation().shortestpath;
-    // int d = S.computeGlobalNavigation().diamater;
-
     // // Assortativity Coefficient
-    // double r = S.computeAssortativityCoefficient();
+    double r = S.computeAssortativityCoefficient();
+    // double C = S.computeClusterCoefficient();
+    // // Navigator A* (with coast)
+    // double l_coast = S.computeGlobalNavigation_Astar().shortestpath;
+    // double d_coast = S.computeGlobalNavigation_Astar().diamater;
     
+
     // // Saving properties
     // cout << prop_file << endl;
     // ofstream pout(prop_file);
     // pout << "#mean shortest path," << "# diamater," << "#assortativity coefficient\r\n";
     // pout << l << "," << d << "," << r << endl;
     // pout.close();
-
-    // // Navigator A* (with coast)
-    // double l_coast = S.computeGlobalNavigation_Astar().shortestpath;
-    // double d_coast = S.computeGlobalNavigation_Astar().diamater;
+    cout << r << endl;
     
-    // // shortest and diameter with coast
-    // cout << prop_file << endl;
-    // ofstream L_c(L_coast_file);
-    // L_c << "#L_coast," << "#D_coast\r\n";
-    // L_c << l_coast << "," << d_coast << endl;
-    // L_c.close();
+
     
     S.writeGML(gml_file);
 

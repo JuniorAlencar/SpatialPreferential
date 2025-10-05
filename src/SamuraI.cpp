@@ -177,27 +177,46 @@ Navigation SamuraI::computeGlobalNavigation(){
     return BFS;
 }
 
+double SamuraI::computeClusterCoefficient() {
+    // Container com coeficientes locais
+    ClusteringContainer c_container(num_vertices(G));
+
+    // Criação correta do property_map usando make_iterator_property_map
+    ClusteringMap c_map = make_iterator_property_map(c_container.begin(), get(vertex_index, G));
+
+    // Calcula e retorna o coeficiente global
+    double global_clustering = all_clustering_coefficients(G, c_map);
+
+    return global_clustering;
+}
+
 
 double SamuraI::computeAssortativityCoefficient() {
-    int NE = num_vertices(G)-1;   // Total number of degree network
-    double T1 = 0.0, T2=T1,T3=T1; // Sum terms
-    double R;                     // Assortativity coefficient
+    const double M = static_cast<double>(boost::num_edges(G)); // número de arestas reais
 
-    for (auto e : boost::make_iterator_range(boost::edges(G))){
-        int u = boost::degree(source(e, G),G);  // degree source
-        int v = boost::degree(target(e, G),G);  // degree target
-        T1 += u*v;                              // first sum;
-        T2 += 0.5*(u+v);                        // second sum;
-        T3 += 0.5*(pow(u,2)+pow(v,2));          // third sum;
-        }
-    T1 /= NE;
-    T2 /= NE;
-    T3 /= NE;
+    double T1 = 0.0, T2 = 0.0, T3 = 0.0;
 
-    R = (T1 - pow(T2,2))/(T3 - pow(T2,2));
+    for (auto e : boost::make_iterator_range(boost::edges(G))) {
+        int u_deg = boost::degree(boost::source(e, G), G);
+        int v_deg = boost::degree(boost::target(e, G), G);
 
+        T1 += static_cast<double>(u_deg) * static_cast<double>(v_deg);
+        T2 += 0.5 * (static_cast<double>(u_deg) + static_cast<double>(v_deg));
+        T3 += 0.5 * (std::pow(u_deg, 2) + std::pow(v_deg, 2));
+    }
+
+    T1 /= M;
+    T2 /= M;
+    T3 /= M;
+
+    double denom = T3 - T2 * T2;
+    if (std::abs(denom) < 1e-12)
+        return 0.0; // rede degenerada (ex.: todos graus iguais)
+
+    double R = (T1 - T2 * T2) / denom;
     return R;
 }
+
 
 Navigation SamuraI::computeGlobalNavigation_Astar() {
     Navigation AStar;
