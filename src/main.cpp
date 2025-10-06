@@ -75,24 +75,20 @@ int main(int argc, char* argv[]) {
     S.createGraph();
     
     // // Assortativity Coefficient
-    double r_newman = S.computeAssortativityCoefficientNewman();
-    double r_spearman = S.computeRankAssortativitySpearman();
-    // double C = S.computeClusterCoefficient();
+    R_ass_Newman r_newman = S.computeAssortativityCoefficientNewmanDAGJK(/*B=*/100, /*use_excess=*/true);
+    R_ass_Spearman r_spearman = S.computeRankAssortativitySpearmanDAGJK(/*B=*/100, /*use_excess=*/true);
+    double C = S.computeClusterCoefficient();
     // // Navigator A* (with coast)
-    // double l_coast = S.computeGlobalNavigation_Astar().shortestpath;
-    // double d_coast = S.computeGlobalNavigation_Astar().diamater;
+    Navigation_COST AStar = S.computeGlobalNavigationDijkstraAuto();
+
+    // Saving properties
+    cout << prop_file << endl;
+    ofstream pout(prop_file);
+    pout << "#MeanShortestPath, " << "#Ass_Spearman, " << "#Ass_Spearman_error, " << "#Ass_Newman, " << "#Ass_Newman_error, " << "#ClusterCoefficient\n";
+    pout << AStar.shortestpath << ","  << r_spearman.R << "," << r_spearman.error  << "," << r_newman.R << "," << r_newman.error << "," <<  C << endl;
+    pout.close();
     
 
-    // // Saving properties
-    // cout << prop_file << endl;
-    // ofstream pout(prop_file);
-    // pout << "#mean shortest path," << "# diamater," << "#assortativity coefficient\r\n";
-    // pout << l << "," << d << "," << r << endl;
-    // pout.close();
-    cout << r_newman << " "<< r_spearman <<endl;
-    
-
-    
     S.writeGML(gml_file);
 
 

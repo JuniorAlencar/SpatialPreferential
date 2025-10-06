@@ -9,10 +9,12 @@
 #include <boost/graph/graph_traits.hpp>
 #include <boost/graph/properties.hpp>
 #include <boost/pending/property.hpp>
-#include <boost/graph/astar_search.hpp>
+
 #include <boost/graph/properties.hpp>
 #include <boost/graph/visitors.hpp>
 #include <boost/graph/exterior_property.hpp>
+#include <boost/graph/dijkstra_shortest_paths.hpp>
+#include <boost/property_map/function_property_map.hpp>  // só se for usar make_function_property_map
 #include <boost/graph/clustering_coefficient.hpp>
 #include <limits>
 #include <cmath>
@@ -41,20 +43,34 @@ struct samargs {
     int m0;
 };
 
-struct Navigation{
+struct Navigation_BFS{
     // WITH COST
-    int diamater_BFS;
-    double shortestpath_BFS;
-    
-    //  WITHOUT COST
-    int diamater_WEIGHT;
-    double shortestpath_WEIGHT;
+    int diamater = 0;
+    double shortestpath = 0.0;
 };
 
-struct Assortativity{
-    double R_Newman;
-    double R_spearman;
+struct Navigation_COST {
+    double shortestpath = 0.0;   // média estimada E[d(u,v)]
+    double diamater     = 0.0;   // diâmetro aproximado (máx d(u,v))
+    double shortestpath_se = 0.0;// erro padrão da média (estimado via jackknife)
+    double coverage = 1.0;       // fração de pares alcançados na amostra
 };
+
+struct R_ass_Newman{
+    double R;
+    double error;
+};
+
+struct R_ass_Spearman{
+    double R;
+    double error;
+};
+
+using Graph = boost::adjacency_list<
+    boost::vecS, boost::vecS, boost::undirectedS,
+    boost::no_property,
+    boost::property<boost::edge_weight_t, double>
+>;
 
 typedef adjacency_list<vecS, vecS, undirectedS, property<vertex_degree_t, int>>
     graph_t;
@@ -72,41 +88,11 @@ typedef std::vector<float> ClusteringContainer;
 typedef boost::iterator_property_map<ClusteringContainer::iterator, property_map<graph_t, vertex_index_t>::const_type> ClusteringMap;
 
 
-template <class Graph, class CostType>
-
-struct zero_heuristic {
-    template <typename Vertex>
-    double operator()(Vertex const&) const {
-        return 0.0;
-    }
-};
-
-
-
-struct found_goal {}; // sinaliza término da busca
-
-template <class Vertex>
-class astar_goal_visitor : public boost::default_astar_visitor {
-private:
-    Vertex m_goal;
-
-public:
-    astar_goal_visitor(Vertex goal) : m_goal(goal) {}
-
-    template <class Graph>
-    void examine_vertex(Vertex u, Graph&) {
-        if (u == m_goal)
-            throw found_goal();
-    }
-};
-
-
 class SamuraI {
   private:
     graph_t G; // the graph ...
 
     int m_num_vertices;
-    
 
     double m_alpha_a; // attachment exponent
     double m_alpha_g; // grouth exponent
@@ -121,14 +107,43 @@ class SamuraI {
     Vector4d center_of_mass;    // vector with center of mass
     Vector4d sum_positions;     // auxiliar vector to center of mass
     //std::vector<float> r;       // vector with r gen for power law
-
-    void CreateNetwork();
     
+    struct EdgeHash {
+        const graph_t* g{};
+        std::size_t operator()(const edge_t& e) const noexcept {
+            auto u = boost::source(e, *g);
+            auto v = boost::target(e, *g);
+            auto a = std::min<std::size_t>(u, v);
+            auto b = std::max<std::size_t>(u, v);
+            std::size_t h = 0;
+            boost::hash_combine(h, a);
+            boost::hash_combine(h, b);
+            return h;
+        }
+    };
+    struct EdgeEq {
+        const graph_t* g{};
+        bool operator()(const edge_t& e1, const edge_t& e2) const noexcept {
+            auto u1 = boost::source(e1, *g), v1 = boost::target(e1, *g);
+            auto u2 = boost::source(e2, *g), v2 = boost::target(e2, *g);
+            auto a1 = std::min<std::size_t>(u1, v1), b1 = std::max<std::size_t>(u1, v1);
+            auto a2 = std::min<std::size_t>(u2, v2), b2 = std::max<std::size_t>(u2, v2);
+            return a1 == a2 && b1 == b2;
+        }
+    };
 
-  public:
+    // <<< Membro da classe (não global, sem inicializar aqui)
+    std::unordered_map<edge_t, double, EdgeHash, EdgeEq> edge_weight_store;
+    void CreateNetwork();
+
+  
+    public:
     SamuraI(const samargs& xargs)
-        : m_num_vertices(xargs.num_vertices), m_alpha_a(xargs.alpha_a), m_alpha_g(xargs.alpha_g),
-          m_r_min(xargs.r_min), m_r_max(xargs.r_max), m_dim(xargs.dim), m_seed(xargs.seed), m_m0(xargs.m0) {}
+    : m_num_vertices(xargs.num_vertices), m_alpha_a(xargs.alpha_a), m_alpha_g(xargs.alpha_g),
+      m_r_min(xargs.r_min), m_r_max(xargs.r_max), m_dim(xargs.dim), m_seed(xargs.seed), m_m0(xargs.m0),
+      // >>> inicializa o unordered_map com functors que conhecem G
+      edge_weight_store(0, EdgeHash{&G}, EdgeEq{&G})
+    {}
 
     inline void createGraph() {
         assert(m_num_vertices > 0);
@@ -138,13 +153,15 @@ class SamuraI {
     }
     void writeDegrees(std::string fname);
     void writeConnections(std::string fname);
-	Navigation computeGlobalNavigation(void);
+	Navigation_BFS computeGlobalNavigation_BFS(void);
+    Navigation_COST computeGlobalNavigationDijkstraAuto(void);    
+    
     void writeGML(std::string fname);
-    Navigation computeGlobalNavigation_Astar(void);
+    void add_weighted_edge(int u, int v);
     double computeClusterCoefficient(void);
 
-    double computeAssortativityCoefficientNewman(void);
-    double computeRankAssortativitySpearman(void);
+    R_ass_Newman computeAssortativityCoefficientNewmanDAGJK(int B, bool use_excess /*=false*/);
+    R_ass_Spearman computeRankAssortativitySpearmanDAGJK(int B, bool use_excess /*=false*/);
     //void writeR(std::string fname);
     
     void clear();
