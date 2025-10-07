@@ -1,0 +1,1 @@
+scp -r ~/Documents/SpatialPreferential/scripts/multithread junioralencar@apolo:codes/TsallisND/scripts/ && scp -r ~/Documents/SpatialPreferential/parms/ junioralencar@apolo:codes/TsallisND/

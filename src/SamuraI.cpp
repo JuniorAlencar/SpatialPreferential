@@ -175,152 +175,78 @@ void SamuraI::add_weighted_edge(int u, int v) {
 
 static inline int clamp_int(int x, int lo, int hi){ return std::max(lo, std::min(hi, x)); }
 
-Navigation_COST SamuraI::computeGlobalNavigationDijkstraAuto(void) {
+#include <boost/graph/dijkstra_shortest_paths.hpp>
+#include <boost/property_map/function_property_map.hpp>
+#include <limits>
+#include <cmath>
+
+Navigation_COST SamuraI::computeGlobalNavigationDijkstraExact(void) {
     using boost::make_iterator_range;
-    using Graph  = decltype(G);
-    using Vertex = typename boost::graph_traits<Graph>::vertex_descriptor;
-    using Edge   = typename boost::graph_traits<Graph>::edge_descriptor;
 
     Navigation_COST out;
-    const std::size_t N = boost::num_vertices(G);
-    if (N <= 1) { out.shortestpath = 0.0; out.diamater = 0.0; out.coverage = 1.0; return out; }
 
+    const std::size_t N = boost::num_vertices(G);
+    if (N <= 1) {
+        out.shortestpath     = 0.0;
+        out.diamater         = 0.0;
+        out.shortestpath_se  = 0.0;
+        out.coverage         = 1.0;
+        return out;
+    }
+
+    // Índice de vértice para property maps
     auto vindex = get(boost::vertex_index, G);
 
-    // ----------------- AUTOTUNE -----------------
-    auto clamp_int = [](int x, int lo, int hi){ return std::max(lo, std::min(hi, x)); };
-    int S = (int)std::ceil(2.0 * std::sqrt((double)N));
-    S = clamp_int(S, 64, 512);
-    if ((std::size_t)S > N) S = (int)N;
-
-    int k_sweeps = (int)std::ceil(std::log2((double)N));
-    k_sweeps = clamp_int(k_sweeps, 8, 32);
-
-    // fontes (reprodutível com o mesmo seed)
-    std::vector<Vertex> verts; verts.reserve(N);
-    for (auto v : make_iterator_range(boost::vertices(G))) verts.push_back(v);
-    std::mt19937_64 rng(static_cast<uint64_t>(m_seed) ^ 0x9e3779b97f4a7c15ULL);
-    std::shuffle(verts.begin(), verts.end(), rng);
-    verts.resize(S);
-
-    // ---------- weight map por função com fallback ----------
-    auto wmap = boost::make_function_property_map<Edge, double>(
-        [&](const Edge& e) -> double {
-            auto it = edge_weight_store.find(e);
-            if (it != edge_weight_store.end()) return it->second;
-            // fallback: calcula distância euclidiana
-            auto u = boost::source(e, G);
-            auto v = boost::target(e, G);
+    // Peso euclidiano on-the-fly: ||pos[u] - pos[v]||
+    auto wmap = boost::make_function_property_map<edge_t, double>(
+        [&](const edge_t& e) -> double {
+            vertex_t u = boost::source(e, G);
+            vertex_t v = boost::target(e, G);
             const Vector4d d = pos[u] - pos[v];
             const double w2  = (d.transpose() * d);
             return std::sqrt(std::max(0.0, w2));
         }
     );
 
-    // ---------- sanity: média do peso das arestas ----------
-#ifndef NDEBUG
-    {
-        double sumw = 0.0; std::size_t cnt = 0;
-        for (auto e : make_iterator_range(boost::edges(G))) {
-            double w = wmap[e];
-            sumw += w; ++cnt;
-        }
-        std::cerr << "[DBG] mean_edge_weight = " << (cnt? sumw/cnt : 0.0) << "\n";
-    }
-#endif
-
-    // buffers de distâncias (weighted + hops)
+    // Buffer de distância
     std::vector<double> dist(N, std::numeric_limits<double>::infinity());
     auto dist_map = boost::make_iterator_property_map(dist.begin(), vindex);
-    std::vector<int> hop(N, INT_MAX);
-    auto hop_map = boost::make_iterator_property_map(hop.begin(), vindex);
 
-    // ---- médias (weighted e hops), mais cobertura ----
-    double sum_all_w = 0.0;  std::uint64_t cnt_all_w = 0;
-    double sum_all_h = 0.0;  std::uint64_t cnt_all_h = 0;
-    std::vector<double> per_source_mean_w; per_source_mean_w.reserve(S);
+    // Acumuladores globais
+    long double   sum_all = 0.0L;     // soma das distâncias mínimas (usar long double p/ estabilidade)
+    std::uint64_t cnt_all = 0;        // nº de pares alcançáveis (ordenados u->v, u!=v)
+    double        diam    = 0.0;      // diâmetro (máx. das distâncias mínimas)
 
-    for (int i = 0; i < S; ++i) {
-        Vertex s = verts[i];
-
-        // weighted (Dijkstra)
+    // Loop por TODAS as fontes (exato)
+    for (vertex_t s : make_iterator_range(boost::vertices(G))) {
         std::fill(dist.begin(), dist.end(), std::numeric_limits<double>::infinity());
-        boost::dijkstra_shortest_paths(G, s, boost::weight_map(wmap).distance_map(dist_map));
-        double sum_s_w = 0.0; std::uint64_t cnt_s_w = 0;
 
-        // hops (BFS “implícito”: weights=1) – fazemos um Dijkstra com peso 1
-        std::fill(hop.begin(), hop.end(), INT_MAX);
-        // podemos simular peso 1 usando uma função constante
-        auto unit_wmap = boost::make_function_property_map<Edge, double>([](const Edge&){ return 1.0; });
-        // dist reutilizada? melhor não: usamos hop_map separado:
-        // rodamos dijkstra com pesos 1 para obter hops (em grafos sem pesos negativos, equivale a BFS)
-        std::vector<double> hop_as_double(N, std::numeric_limits<double>::infinity());
-        auto hop_as_double_map = boost::make_iterator_property_map(hop_as_double.begin(), vindex);
-        boost::dijkstra_shortest_paths(G, s, boost::weight_map(unit_wmap).distance_map(hop_as_double_map));
-        double sum_s_h = 0.0; std::uint64_t cnt_s_h = 0;
+        boost::dijkstra_shortest_paths(
+            G, s,
+            boost::weight_map(wmap)
+                 .distance_map(dist_map)
+        );
 
-        for (auto v : make_iterator_range(boost::vertices(G))) {
+        // Acumula resultados desta fonte
+        for (vertex_t v : make_iterator_range(boost::vertices(G))) {
             if (v == s) continue;
-            // weighted
-            const double dw = dist[v];
-            if (std::isfinite(dw)) { sum_s_w += dw; ++cnt_s_w; }
-            // hops
-            const double dh = hop_as_double[v];
-            if (std::isfinite(dh)) { sum_s_h += dh; ++cnt_s_h; }
+            const double dv = dist[v];
+            if (std::isfinite(dv)) {
+                sum_all += dv;
+                ++cnt_all;
+                if (dv > diam) diam = dv;
+            }
         }
-
-        if (cnt_s_w > 0) { sum_all_w += sum_s_w; cnt_all_w += cnt_s_w; per_source_mean_w.push_back(sum_s_w/(double)cnt_s_w); }
-        if (cnt_s_h > 0) { sum_all_h += sum_s_h; cnt_all_h += cnt_s_h; }
     }
 
-    out.shortestpath = (cnt_all_w ? sum_all_w / (double)cnt_all_w : 0.0);
-    out.coverage     = (N > 1) ? ( (double)cnt_all_w / (double)(S * (N - 1)) ) : 1.0;
+    // Média exata sobre pares alcançáveis
+    out.shortestpath    = (cnt_all ? static_cast<double>(sum_all / (long double)cnt_all) : 0.0);
+    out.diamater        = diam;
+    out.shortestpath_se = 0.0; // exato, sem erro amostral
 
-    // erro (jackknife por fonte) – weighted
-    if (per_source_mean_w.size() >= 2) {
-        double mbar = 0.0; for (double m : per_source_mean_w) mbar += m; mbar /= (double)per_source_mean_w.size();
-        double var = 0.0;  for (double m : per_source_mean_w) { double d = m - mbar; var += d*d; }
-        var *= (double)(per_source_mean_w.size() - 1) / (double)per_source_mean_w.size();
-        out.shortestpath_se = std::sqrt(std::max(0.0, var / (double)per_source_mean_w.size()));
-    } else {
-        out.shortestpath_se = 0.0;
-    }
-
-    // ---- diâmetro aproximado (k double-sweeps) com pesos corretos ----
-    auto farthest = [&](Vertex src, double &maxd, Vertex &argmax){
-        std::fill(dist.begin(), dist.end(), std::numeric_limits<double>::infinity());
-        boost::dijkstra_shortest_paths(G, src, boost::weight_map(wmap).distance_map(dist_map));
-        maxd = 0.0; argmax = src;
-        for (auto v : make_iterator_range(boost::vertices(G))) {
-            double dv = dist[v];
-            if (std::isfinite(dv) && dv > maxd) { maxd = dv; argmax = v; }
-        }
-    };
-
-    double best = 0.0;
-    for (int t = 0; t < k_sweeps; ++t) {
-        Vertex a = verts[t % S]; double d1; Vertex b;
-        farthest(a, d1, b);
-        double d2; Vertex c;
-        farthest(b, d2, c);
-        if (d1 > best) best = d1;
-        if (d2 > best) best = d2;
-    }
-    out.diamater = best;
-
-#ifndef NDEBUG
-    // logs de diagnóstico
-    double Lw = out.shortestpath;
-    double Lh = (cnt_all_h ? (sum_all_h / (double)cnt_all_h) : 0.0);
-    std::cerr << "[DBG] N=" << N
-              << "  S=" << S
-              << "  k_sweeps=" << k_sweeps
-              << "  coverage=" << out.coverage
-              << "  L_weighted=" << Lw
-              << "  L_hops=" << Lh
-              << "  ratio(Lw/Lh)=" << (Lh>0? Lw/Lh : -1.0)
-              << "\n";
-#endif
+    // Cobertura = fração de pares alcançáveis entre N*(N-1)
+    const long double total_pairs = static_cast<long double>(N) * static_cast<long double>(N - 1);
+    out.coverage = (total_pairs > 0.0L ? static_cast<double>((long double)cnt_all / total_pairs) : 1.0);
 
     return out;
 }

@@ -18,6 +18,12 @@ namespace fs = boost::filesystem;
 
 using namespace std;
 
+enum RunMode : int {
+    PROPS_ONLY = 1,
+    NETWORK_ONLY = 2,
+    BOTH = 3
+};
+
 samargs read_parametes(const string& fname) {
     std::ifstream f(fname.c_str());
     json data = json::parse(f);
@@ -31,6 +37,7 @@ samargs read_parametes(const string& fname) {
     xargs.dim = data.value("dim", 3);
     xargs.seed = data.value("seed", 1234);
     xargs.m0 = data.value("m0", 1);
+    xargs.run_mode     = data.value("run_mode", static_cast<int>(NETWORK_ONLY));
     
     if (xargs.seed < 0) {
         // std::time_t now = std::time(0);
@@ -41,6 +48,10 @@ samargs read_parametes(const string& fname) {
         int now = dist(Gen);
         xargs.seed = now;
     }
+
+    // leitura robusta para props
+
+
     return xargs;
 }
 
@@ -74,23 +85,62 @@ int main(int argc, char* argv[]) {
     SamuraI S(xargs);
     S.createGraph();
     
-    // // Assortativity Coefficient
-    R_ass_Newman r_newman = S.computeAssortativityCoefficientNewmanDAGJK(/*B=*/100, /*use_excess=*/true);
-    R_ass_Spearman r_spearman = S.computeRankAssortativitySpearmanDAGJK(/*B=*/100, /*use_excess=*/true);
-    double C = S.computeClusterCoefficient();
-    // // Navigator A* (with coast)
-    Navigation_COST AStar = S.computeGlobalNavigationDijkstraAuto();
-
-    // Saving properties
-    cout << prop_file << endl;
-    ofstream pout(prop_file);
-    pout << "#MeanShortestPath, " << "#Ass_Spearman, " << "#Ass_Spearman_error, " << "#Ass_Newman, " << "#Ass_Newman_error, " << "#ClusterCoefficient\n";
-    pout << AStar.shortestpath << ","  << r_spearman.R << "," << r_spearman.error  << "," << r_newman.R << "," << r_newman.error << "," <<  C << endl;
-    pout.close();
+    auto run_mode = static_cast<RunMode>(xargs.run_mode);
     
+    switch (run_mode) {
+    case PROPS_ONLY: {
+        R_ass_Newman   r_newman   = S.computeAssortativityCoefficientNewmanDAGJK(/*B=*/100, /*use_excess=*/true);
+        R_ass_Spearman r_spearman = S.computeRankAssortativitySpearmanDAGJK(/*B=*/100, /*use_excess=*/true);
+        double C = S.computeClusterCoefficient();
 
+        Navigation_COST AStar = S.computeGlobalNavigationDijkstraExact();
+        Navigation_BFS  bfs   = S.computeGlobalNavigation_BFS();
+
+        std::cout << prop_file << std::endl;
+        std::ofstream pout(prop_file);
+        pout << "#MeanShortestPathDijstrika, " << "#MeanShortestPathBFS, "
+            << "#Ass_Spearman, " << "#Ass_Spearman_error, "
+            << "#Ass_Newman, "  << "#Ass_Newman_error, "
+            << "#ClusterCoefficient\n";
+        pout << AStar.shortestpath << "," << bfs.shortestpath << ","
+            << r_spearman.R << "," << r_spearman.error  << ","
+            << r_newman.R   << "," << r_newman.error    << ","
+            << C << "\n";
+        break;
+    }
+    case NETWORK_ONLY: {
+        S.writeGML(gml_file);
+        break;
+    }
+    case BOTH: {
+    // 1) salva rede
     S.writeGML(gml_file);
 
+    // 2) calcula e salva propriedades (reuso do bloco acima)
+    R_ass_Newman   r_newman   = S.computeAssortativityCoefficientNewmanDAGJK(/*B=*/100, /*use_excess=*/true);
+    R_ass_Spearman r_spearman = S.computeRankAssortativitySpearmanDAGJK(/*B=*/100, /*use_excess=*/true);
+    double C = S.computeClusterCoefficient();
+
+    Navigation_COST AStar = S.computeGlobalNavigationDijkstraExact();
+    Navigation_BFS  bfs   = S.computeGlobalNavigation_BFS();
+
+    std::cout << prop_file << std::endl;
+    std::ofstream pout(prop_file);
+    pout << "#MeanShortestPathDijstrika, " << "#MeanShortestPathBFS, "
+         << "#Ass_Spearman, " << "#Ass_Spearman_error, "
+         << "#Ass_Newman, "  << "#Ass_Newman_error, "
+         << "#ClusterCoefficient\n";
+    pout << AStar.shortestpath << "," << bfs.shortestpath << ","
+         << r_spearman.R << "," << r_spearman.error  << ","
+         << r_newman.R   << "," << r_newman.error    << ","
+         << C << "\n";
+    break;
+    }
+    default:
+        std::cerr << "[warn] run_mode inválido (" << xargs.run_mode
+                << "). Use 1 (props), 2 (network), 3 (both).\n";
+        break;
+    }
 
     S.clear();
     

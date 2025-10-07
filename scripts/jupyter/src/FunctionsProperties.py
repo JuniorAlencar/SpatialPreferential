@@ -67,7 +67,7 @@ def extract_alpha_values(folder_data):
     base_path = folder_data
 
     # Regex para capturar nvalue, dvalue, alpha_a (aavalue) e alpha_g (agvalue)
-    pattern = r"N_(\d+)/dim_(\d+)/alpha_a_([\d]+\.\d{2})_alpha_g_([\d]+\.\d{2})"
+    pattern = r"N_(\d+)/m0_(\d+)/dim_(\d+)/alpha_a_([\d]+\.\d{2})_alpha_g_([\d]+\.\d{2})"
 
     # Estrutura para armazenar as combinações encontradas
     combinations = set()
@@ -77,10 +77,11 @@ def extract_alpha_values(folder_data):
         match = re.search(pattern, root)
         if match:
             nvalue = int(match.group(1))  # nvalue como inteiro
-            dvalue = int(match.group(2))  # dvalue como inteiro
-            aavalue = float(match.group(3))  # alpha_a como float
-            agvalue = float(match.group(4))  # alpha_g como float
-            combinations.add((nvalue, dvalue, round(aavalue, 2), round(agvalue, 2)))
+            m0value = int(match.group(2))  # nvalue como inteiro
+            dvalue = int(match.group(3))  # dvalue como inteiro
+            aavalue = float(match.group(4))  # alpha_a como float
+            agvalue = float(match.group(5))  # alpha_g como float
+            combinations.add((nvalue, m0value ,dvalue, round(aavalue, 2), round(agvalue, 2)))
     return combinations
 
 def update_headers(folder_data):
@@ -113,234 +114,289 @@ def update_headers(folder_data):
                     else:
                         print(f"Nenhuma atualização necessária para o arquivo: {file_path}")
 
-# IMPORTANT! READ
-# the code as it is, deletes the samples from the computer after execution. if you don't want this to happen, 
-# comment out the line os.remove(File)
-# Create file with all samples 
-# def all_properties_file(N, dim, alpha_a, alpha_g):
-#     # Diretório onde os arquivos estão localizados
-#     path_d = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}/prop"
-#     path_save = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a}_alpha_g_{alpha_g}"
-#     print(f"N = {N}, dim = {dim}, alpha_a = {alpha_a}, alpha_g = {alpha_g}")
-#     # Arquivos a serem atualizados
-#     properties_file = os.path.join(path_save, "properties_set.txt")
-#     filenames_file = os.path.join(path_save, "filenames.txt")
-    
-#     # Verificar se o diretório 'prop' existe
-#     if not os.path.exists(path_d):
-#         print(f"O diretório {path_d} não existe. Nada a ser feito.")
-#         return
-    
-#     # Obter todos os arquivos CSV na pasta prop
-#     all_files = glob.glob(os.path.join(path_d, "*.csv"))
-    
-#     # Se não houver arquivos na pasta prop, nada é feito
-#     if not all_files:
-#         print(f"A pasta {path_d} está vazia. Nada a ser feito.")
-#         return
-    
-#     # Checar se o arquivo filenames.txt existe, caso contrário criar um
-#     if os.path.exists(filenames_file):
-#         with open(filenames_file, 'r') as f:
-#             filenames_set = set(f.read().splitlines())  # Ler todos os arquivos já processados
-#     else:
-#         filenames_set = set()
-    
-#     # Se o arquivo properties_set.txt existir, carregar o dataframe, caso contrário criar um novo
-#     if os.path.exists(properties_file):
-#         df = pd.read_csv(properties_file, sep=' ')
-#     else:
-#         df = pd.DataFrame(columns=["#short_path", "#diamater", "#ass_coeff", "#cod_file"])
-    
-#     # Variável para rastrear se houve atualizações
-#     updated = False
-    
-#     # Iterar sobre todos os arquivos CSV e verificar se já foram processados
-#     for file in all_files:
-#         filename = os.path.basename(file)
-        
-#         # Se o arquivo já foi processado, ignorar
-#         if filename in filenames_set:
-#             continue
-        
-#         # Se o arquivo ainda não foi processado, ler os dados e atualizar o DataFrame
-#         new_data = pd.read_csv(file)
-#         df = df.append({
-#             "#short_path": new_data["#mean shortest path"].values[0],
-#             "#diamater": new_data["# diamater"].values[0],
-#             "#ass_coeff": new_data["#assortativity coefficient"].values[0],
-#             "#cod_file": filename
-#         }, ignore_index=True)
-        
-#         # Adicionar o nome do arquivo ao conjunto de arquivos processados
-#         filenames_set.add(filename)
-#         updated = True  # Indicar que houve atualizações
-#         os.remove(file)
-    
-#     # Se houver atualizações, salvar os arquivos atualizados
-#     if updated:
-#         df.to_csv(properties_file, sep=' ', index=False)
-#         with open(filenames_file, 'w') as f:
-#             f.write("\n".join(sorted(filenames_set)))  # Escrever os nomes dos arquivos processados
-#         print(f"Arquivos {properties_file} e {filenames_file} atualizados com sucesso.")
-#     else:
-#         print("Nenhuma atualização necessária. Todos os arquivos já estavam processados.")
-def all_properties_file(N, dim, alpha_a, alpha_g):
-    # Diretório onde os arquivos estão localizados
-    path_d = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/prop"
-    path_save = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}"
-    print(f"N = {N}, dim = {dim}, alpha_a = {alpha_a:.2f}, alpha_g = {alpha_g:.2f}")
-    
-    # Arquivos a serem atualizados
+
+import os, glob
+import pandas as pd
+
+def all_properties_file(N, m0, dim, alpha_a, alpha_g):
+    # Diretórios
+    path_d    = f"../../data/N_{N}/m0_{m0}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/prop"
+    path_save = f"../../data/N_{N}/m0_{m0}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}"
+    print(f"N = {N}, m0 = {m0}, dim = {dim}, alpha_a = {alpha_a:.2f}, alpha_g = {alpha_g:.2f}")
+
     properties_file = os.path.join(path_save, "properties_set.txt")
-    filenames_file = os.path.join(path_save, "filenames.txt")
-    
-    # Verificar se o diretório 'prop' existe
+    filenames_file  = os.path.join(path_save, "filenames.txt")
+
     if not os.path.exists(path_d):
         print(f"O diretório {path_d} não existe. Nada a ser feito.")
         return
-    
-    # Obter todos os arquivos CSV na pasta prop
-    all_files = glob.glob(os.path.join(path_d, "*.csv"))
-    
-    # Remover arquivos vazios
-    all_files = [file for file in all_files if os.path.getsize(file) > 0]
-    
-    # Se não houver arquivos na pasta prop, nada é feito
+
+    all_files = [f for f in glob.glob(os.path.join(path_d, "*.csv")) if os.path.getsize(f) > 0]
     if not all_files:
         print(f"A pasta {path_d} está vazia ou contém apenas arquivos vazios. Nada a ser feito.")
         return
-    
-    # Checar se o arquivo filenames.txt existe, caso contrário criar um
+
+    # Arquivos já processados
     if os.path.exists(filenames_file):
-        with open(filenames_file, 'r') as f:
-            filenames_set = set(f.read().splitlines())  # Ler todos os arquivos já processados
+        with open(filenames_file, "r") as f:
+            filenames_set = set(f.read().splitlines())
     else:
         filenames_set = set()
-    
-    # Se o arquivo properties_set.txt existir, carregar o dataframe, caso contrário criar um novo
+
+    # Schema unificado do arquivo final (sem '#', nomes padronizados)
+    cols_out = [
+        "MeanShortestPathDijkstra",
+        "MeanShortestPathBFS",
+        "Ass_Spearman",
+        "Ass_Spearman_error",
+        "Ass_Newman",
+        "Ass_Newman_error",
+        "ClusterCoefficient",
+    ]
+
+    # DataFrame existente (se houver)
     if os.path.exists(properties_file):
         df = pd.read_csv(properties_file, sep=' ')
     else:
-        df = pd.DataFrame(columns=["#short_path", "#diamater", "#ass_coeff"])
-    
-    # Variável para rastrear se houve atualizações
+        df = pd.DataFrame(columns=cols_out)
+
+    # Mapas de possíveis nomes de coluna no CSV de entrada → nome padronizado
+    # (aceita o cabeçalho com ou sem '#', com/sem typo "Dijstrika")
+    candidates = {
+        "MeanShortestPathDijkstra": [
+            "#MeanShortestPathDijstrika", "#MeanShortestPathDijkstra",
+            "MeanShortestPathDijstrika", "MeanShortestPathDijkstra"
+        ],
+        "MeanShortestPathBFS": [
+            "#MeanShortestPathBFS", "MeanShortestPathBFS"
+        ],
+        "Ass_Spearman": [
+            "#Ass_Spearman", "Ass_Spearman"
+        ],
+        "Ass_Spearman_error": [
+            "#Ass_Spearman_error", "Ass_Spearman_error"
+        ],
+        "Ass_Newman": [
+            "#Ass_Newman", "Ass_Newman"
+        ],
+        "Ass_Newman_error": [
+            "#Ass_Newman_error", "Ass_Newman_error"
+        ],
+        "ClusterCoefficient": [
+            "#ClusterCoefficient", "ClusterCoefficient"
+        ],
+    }
+
+    def pick_value(row, keys):
+        for k in keys:
+            if k in row:
+                return row[k]
+        missing = ", ".join(keys)
+        raise KeyError(f"Coluna não encontrada no CSV: tentei {missing}")
+
     updated = False
-    new_rows = []  # Armazenar novas linhas para adicionar ao dataframe
-    
-    # Iterar sobre todos os arquivos CSV e verificar se já foram processados
+    new_rows = []
+
     for file in all_files:
         filename = os.path.basename(file)
-        
-        # Se o arquivo já foi processado, ignorar
+
         if filename in filenames_set:
-            os.remove(file)  # Opcional: remover o arquivo após processamento
+            # já processado — pode remover
+            os.remove(file)
             continue
-        
-        # Se o arquivo ainda não foi processado, ler os dados e adicionar ao DataFrame
-        new_data = pd.read_csv(file, sep=',')
-        
+
+        # lê CSV com vírgula e ignora espaços depois da vírgula
+        new_data = pd.read_csv(file, sep=',', skipinitialspace=True)
         if new_data.empty:
-            os.remove(file)  # Deletar arquivo vazio
+            os.remove(file)
             print(f"Arquivo vazio {filename} foi deletado.")
             continue
-        
-        
-        new_row = {
-            "#short_path": new_data["#mean shortest path"].values[0],
-            "#diamater": new_data["# diamater"].values[0],
-            "#ass_coeff": new_data["#assortativity coefficient"].values[0]
-        }
+
+        row0 = new_data.iloc[0]
+
+        try:
+            new_row = {
+                "MeanShortestPathDijkstra": pick_value(row0, candidates["MeanShortestPathDijkstra"]),
+                "MeanShortestPathBFS"     : pick_value(row0, candidates["MeanShortestPathBFS"]),
+                "Ass_Spearman"            : pick_value(row0, candidates["Ass_Spearman"]),
+                "Ass_Spearman_error"      : pick_value(row0, candidates["Ass_Spearman_error"]),
+                "Ass_Newman"              : pick_value(row0, candidates["Ass_Newman"]),
+                "Ass_Newman_error"        : pick_value(row0, candidates["Ass_Newman_error"]),
+                "ClusterCoefficient"      : pick_value(row0, candidates["ClusterCoefficient"]),
+            }
+        except KeyError as e:
+            print(f"[WARN] {filename}: {e}. Pulando este arquivo.")
+            continue
+
         new_rows.append(new_row)
-        
-        # Adicionar o nome do arquivo ao conjunto de arquivos processados
         filenames_set.add(filename)
-        updated = True  # Indicar que houve atualizações
-        os.remove(file)  # Opcional: remover o arquivo após processamento
-    
-    # Se houver atualizações, salvar os arquivos atualizados
+        updated = True
+        os.remove(file)  # remove após consumir
+
     if updated:
-        # Adicionar as novas linhas ao dataframe
         df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
-        
-        # Salvar o dataframe atualizado
+        # salva com espaço para manter compatibilidade anterior
         df.to_csv(properties_file, sep=' ', index=False)
-        
-        # Atualizar o arquivo filenames.txt
         with open(filenames_file, 'w') as f:
-            f.write("\n".join(sorted(filenames_set)))  # Escrever os nomes dos arquivos processados
-        
+            f.write("\n".join(sorted(filenames_set)))
         print(f"Arquivos {properties_file} e {filenames_file} atualizados com sucesso.")
     else:
         print("Nenhuma atualização necessária. Todos os arquivos já estavam processados.")
 
+import os, re, glob, shutil
+import pandas as pd
+import numpy as np
+
 def all_data(folder_data):
-    # Caminho inicial
     base_path = folder_data
 
-    # Regex para capturar nvalue, dvalue, alpha_a (aavalue) e alpha_g (agvalue)
-    pattern = r"N_(\d+)/dim_(\d+)/alpha_a_([\d]+\.\d{2})_alpha_g_([\d]+\.\d{2})"
+    # Agora capturando também o m0
+    pattern = r"N_(\d+)/m0_(\d+)/dim_(\d+)/alpha_a_([\d]+\.\d{2})_alpha_g_([\d]+\.\d{2})"
 
-    # Estrutura para armazenar os dados
-    all_data = {
-        "N": [], "dim": [], "alpha_a": [], "alpha_g": [], "N_samples": [],
-        "short_mean": [], "short_err": [], "short_err_per": [],
-        "diameter_mean": [], "diameter_err": [], "diameter_err_per": [],
-        "ass_coeff_mean": [], "ass_coeff_err": [], "ass_coeff_err_per": []
+    out = {
+        "N": [], "m0": [], "dim": [], "alpha_a": [], "alpha_g": [], "N_samples": [],
+        # Dijkstra/BFS/Cluster → média e SEM
+        "dijkstra_mean": [], "dijkstra_sem": [],
+        "bfs_mean": [], "bfs_sem": [],
+        "cluster_mean": [], "cluster_sem": [],
+        # Assortatividades com erro por amostra → média ponderada e erro combinado
+        "ass_spearman_mean": [], "ass_spearman_err": [],
+        "ass_newman_mean": [], "ass_newman_err": [],
     }
 
-    # Percorrer todas as subpastas a partir de base_path
-    for root, dirs, files in os.walk(base_path, topdown=False):  # Processa de baixo para cima
-        match = re.search(pattern, root)
-        if match:
-            nvalue = int(match.group(1))  # nvalue como inteiro
-            dvalue = int(match.group(2))  # dvalue como inteiro
-            aavalue = float(match.group(3))  # alpha_a como float
-            agvalue = float(match.group(4))  # alpha_g como float
-            
-            # Caminhos relevantes
-            properties_file = os.path.join(root, "properties_set.txt")
-            prop_folder = os.path.join(root, "prop")
+    # mapeamento de nomes (flexível caso apareça com '#')
+    cols_map = {
+        "dijkstra": ["MeanShortestPathDijkstra", "#MeanShortestPathDijkstra", "#MeanShortestPathDijstrika"],
+        "bfs":      ["MeanShortestPathBFS", "#MeanShortestPathBFS"],
+        "spear":    ["Ass_Spearman", "#Ass_Spearman"],
+        "spear_e":  ["Ass_Spearman_error", "#Ass_Spearman_error"],
+        "newman":   ["Ass_Newman", "#Ass_Newman"],
+        "newman_e": ["Ass_Newman_error", "#Ass_Newman_error"],
+        "cluster":  ["ClusterCoefficient", "#ClusterCoefficient"],
+    }
 
-            # Se o arquivo properties_set.txt não existe e a pasta prop está vazia, apaga a pasta root
-            if not os.path.exists(properties_file) and (not os.path.exists(prop_folder) or not os.listdir(prop_folder)):
-                print(f"❌ Removendo pasta vazia e sem dados: {root}")
-                shutil.rmtree(root, ignore_errors=True)  # Remove toda a pasta sem erro
-                continue  # Pula para a próxima iteração
+    def pick_col(df, candidates):
+        for c in candidates:
+            if c in df.columns:
+                return c
+        return None
 
-            # Se o arquivo existir, continuar processando
-            if os.path.exists(properties_file):
-                print(f"N = {nvalue}, dim = {dvalue}, alpha_a = {aavalue:.2f}, alpha_g = {agvalue:.2f}")
-                df = pd.read_csv(properties_file, sep=' ')
+    def wmean_and_err(values, errors):
+        """Média ponderada por 1/err^2; retorna (mean, err_comb). Fallback p/ média simples."""
+        vals = np.asarray(values, dtype=float)
+        errs = np.asarray(errors, dtype=float)
+        mask = np.isfinite(vals) & np.isfinite(errs) & (errs > 0)
+        if mask.sum() >= 1:
+            w = 1.0 / (errs[mask] ** 2)
+            m = np.sum(w * vals[mask]) / np.sum(w)
+            se = 1.0 / np.sqrt(np.sum(w))   # erro combinado da média ponderada
+            return float(m), float(se)
+        # fallback: média simples e SEM
+        vals2 = vals[np.isfinite(vals)]
+        if vals2.size == 0:
+            return np.nan, np.nan
+        return float(np.mean(vals2)), float(pd.Series(vals2).sem())
 
-                # Adicionar parâmetros ao dicionário
-                all_data["N"].append(nvalue)
-                all_data["dim"].append(dvalue)
-                all_data["alpha_a"].append(round(aavalue, 2))
-                all_data["alpha_g"].append(round(agvalue, 2))
-                all_data["N_samples"].append(len(df))
+    for root, dirs, files in os.walk(base_path, topdown=False):
+        m = re.search(pattern, root)
+        if not m:
+            continue
 
-                # Adicionar as quantidades estatísticas
-                all_data["short_mean"].append(df["#short_path"].mean())
-                all_data["short_err"].append(df["#short_path"].sem())
-                all_data["short_err_per"].append((df["#short_path"].sem() / df["#short_path"].mean()) * 100)
+        nvalue = int(m.group(1))
+        m0val  = int(m.group(2))
+        dvalue = int(m.group(3))
+        aav    = float(m.group(4))
+        agv    = float(m.group(5))
 
-                all_data["diameter_mean"].append(df["#diamater"].mean())
-                all_data["diameter_err"].append(df["#diamater"].sem())
-                all_data["diameter_err_per"].append((df["#diamater"].sem() / df["#diamater"].mean()) * 100)
+        properties_file = os.path.join(root, "properties_set.txt")
+        prop_folder     = os.path.join(root, "prop")
 
-                all_data["ass_coeff_mean"].append(df["#ass_coeff"].mean())
-                all_data["ass_coeff_err"].append(df["#ass_coeff"].sem())
-                all_data["ass_coeff_err_per"].append(abs((df["#ass_coeff"].sem() / df["#ass_coeff"].mean()) * 100))
+        # limpeza de pasta sem dados
+        if not os.path.exists(properties_file) and (not os.path.exists(prop_folder) or not os.listdir(prop_folder)):
+            print(f"❌ Removendo pasta vazia e sem dados: {root}")
+            shutil.rmtree(root, ignore_errors=True)
+            continue
 
-    # Criar dataframe e salvar
-    df_all = pd.DataFrame(data=all_data)
-    df_all = df_all[df_all["alpha_g"]>=1.0]
-    df_all = df_all.sort_values("N_samples", ascending=False).drop_duplicates(
-        subset=["N", "dim", "alpha_a", "alpha_g"], keep="first"
-    ).reset_index(drop=True)
+        if not os.path.exists(properties_file):
+            continue
+
+        print(f"N = {nvalue}, m0 = {m0val}, dim = {dvalue}, alpha_a = {aav:.2f}, alpha_g = {agv:.2f}")
+        df = pd.read_csv(properties_file, sep=' ')
+
+        # localizar colunas
+        c_dij   = pick_col(df, cols_map["dijkstra"])
+        c_bfs   = pick_col(df, cols_map["bfs"])
+        c_spear = pick_col(df, cols_map["spear"])
+        c_spear_e = pick_col(df, cols_map["spear_e"])
+        c_new   = pick_col(df, cols_map["newman"])
+        c_new_e = pick_col(df, cols_map["newman_e"])
+        c_clu   = pick_col(df, cols_map["cluster"])
+
+        # número de amostras válidas (usa coluna Dijkstra como proxy; se faltar, usa qualquer)
+        if c_dij and c_dij in df:
+            n_samples = df[c_dij].dropna().shape[0]
+        else:
+            n_samples = len(df)
+
+        # agrega métricas simples (média + SEM)
+        def mean_sem(colname):
+            if colname and colname in df:
+                series = pd.to_numeric(df[colname], errors="coerce")
+                return float(series.mean()), float(series.sem())
+            return np.nan, np.nan
+
+        dij_mean, dij_sem   = mean_sem(c_dij)
+        bfs_mean, bfs_sem   = mean_sem(c_bfs)
+        clu_mean, clu_sem   = mean_sem(c_clu)
+
+        # assortatividades com erro por amostra → média ponderada
+        if c_spear and c_spear_e and (c_spear in df) and (c_spear_e in df):
+            spear_mean, spear_err = wmean_and_err(
+                pd.to_numeric(df[c_spear], errors="coerce"),
+                pd.to_numeric(df[c_spear_e], errors="coerce"),
+            )
+        else:
+            spear_mean, spear_err = (np.nan, np.nan)
+
+        if c_new and c_new_e and (c_new in df) and (c_new_e in df):
+            new_mean, new_err = wmean_and_err(
+                pd.to_numeric(df[c_new], errors="coerce"),
+                pd.to_numeric(df[c_new_e], errors="coerce"),
+            )
+        else:
+            new_mean, new_err = (np.nan, np.nan)
+
+        # preencher saída
+        out["N"].append(nvalue)
+        out["m0"].append(m0val)
+        out["dim"].append(dvalue)
+        out["alpha_a"].append(round(aav, 2))
+        out["alpha_g"].append(round(agv, 2))
+        out["N_samples"].append(n_samples)
+
+        out["dijkstra_mean"].append(dij_mean)
+        out["dijkstra_sem"].append(dij_sem)
+        out["bfs_mean"].append(bfs_mean)
+        out["bfs_sem"].append(bfs_sem)
+        out["cluster_mean"].append(clu_mean)
+        out["cluster_sem"].append(clu_sem)
+
+        out["ass_spearman_mean"].append(spear_mean)
+        out["ass_spearman_err"].append(spear_err)
+        out["ass_newman_mean"].append(new_mean)
+        out["ass_newman_err"].append(new_err)
+
+    # montar DF, filtrar e salvar
+    df_all = pd.DataFrame(out)
+    if not df_all.empty:
+        df_all = df_all[df_all["alpha_g"] >= 1.0]
+        df_all = df_all.sort_values("N_samples", ascending=False).drop_duplicates(
+            subset=["N", "m0", "dim", "alpha_a", "alpha_g"], keep="first"
+        ).reset_index(drop=True)
+
     df_all.to_csv("../../data/all_data.txt", sep=' ', index=False)
     print("✅ Processamento concluído!")
+
 
 # Linear regression with errors in parameters
 def linear_regression(X,Y,Erro_Y,Parameter):

@@ -19,56 +19,48 @@ import pandas as pd
 
 # N = 10**5
 # N_s = 600
-N = 100000
-N_s = 300
-dimensions = [1,2,3,4]
+# N = [2**12, 2**13, 2**14, 2**15, 2**16, 2**17]
+# NumSamples = [10000, 5000, 2500, 1000, 500, 100]
+N = [10**5]
+NumSamples = [100]
+# alpha_a = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+# alpha_g = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+
+alpha_a = [2.0, 3.0, 4.0, 5.0]
+alpha_g = [1.0, 2.0, 3.0, 4.0, 5.0]
+
 alpha_ag_f = 2.0
-alpha_a = [1.0, 2.0, 3.0, 4.0, 5.0]
-alpha_g = [2.0, 3.0, 4.0, 5.0]
-m0 = 2
-# centers_30 = [2.5, 5.50, 8.70, 10.7]
-# step = 0.1
-# n_side = 3  # número de valores para cada lado
 
-# alpha_A_30 = [
-#     [float(f"{x:.2f}") for x in np.linspace(c - n_side*step, c + n_side*step, 2*n_side + 1)]
-#     for c in centers_30
-# ]
+m0 = 1
+dim = [1,2,3,4]
 
-# centers_50 = [2.40, 5.3, 8.3, 10.3]
-# step = 0.1
-# n_side = 3  # número de valores para cada lado
-
-# alpha_A_50 = [
-#     [float(f"{x:.2f}") for x in np.linspace(c - n_side*step, c + n_side*step, 2*n_side + 1)]
-#     for c in centers_50
-# ]
-
-# # #n, dim, alpha_a, alpha_g
-
+run_mode=1 # Just Network
 parms = {"N":[], "dim":[], "alpha_a":[], "alpha_g":[], "m0":[]}
 
 #for n in N:
-for i in range(len(dimensions)):
-    for aa in alpha_a:
-        FunctionsFile.JsonGenerate(N, aa, alpha_ag_f, dimensions[i], m0)
-        parms["N"].append(N)
-        parms["dim"].append(dimensions[i])
-        parms["alpha_a"].append(aa)
-        parms["alpha_g"].append(alpha_ag_f)
-        parms["m0"].append(m0)
-    
-    for ag in alpha_g:
-        FunctionsFile.JsonGenerate(N, alpha_ag_f, ag, dimensions[i], m0)
-        parms["N"].append(N)
-        parms["dim"].append(dimensions[i])
-        parms["alpha_a"].append(alpha_ag_f)
-        parms["alpha_g"].append(ag)
-        parms["m0"].append(m0)
+
+for i in range(len(N)):
+    for d in dim:
+        for aa in alpha_a:
+            FunctionsFile.JsonGenerate(N[i], aa, alpha_ag_f, d, m0, run_mode)
+            parms["N"].append(N[i])
+            parms["dim"].append(d)
+            parms["alpha_a"].append(aa)
+            parms["alpha_g"].append(alpha_ag_f)
+            parms["m0"].append(m0)
+        for ag in alpha_g:
+            FunctionsFile.JsonGenerate(N[i], alpha_ag_f, ag, d, m0, run_mode)
+            parms["N"].append(N[i])
+            parms["dim"].append(d)
+            parms["alpha_a"].append(alpha_ag_f)
+            parms["alpha_g"].append(ag)
+            parms["m0"].append(m0)
+    FunctionsFile.multithread_pc(N[i], NumSamples[i])
+    FunctionsFile.permission_run(N[i])
 
 df = pd.DataFrame(data=parms)
 df.to_csv("parameters.csv",sep=",")
 
 #for j in range(len(N)):
-FunctionsFile.multithread_pc(N, N_s)
-FunctionsFile.permission_run(N)
+#FunctionsFile.multithread_pc(N, N_s)
+#FunctionsFile.permission_run(N)

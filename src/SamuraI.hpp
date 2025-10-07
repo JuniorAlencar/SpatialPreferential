@@ -10,7 +10,6 @@
 #include <boost/graph/properties.hpp>
 #include <boost/pending/property.hpp>
 
-#include <boost/graph/properties.hpp>
 #include <boost/graph/visitors.hpp>
 #include <boost/graph/exterior_property.hpp>
 #include <boost/graph/dijkstra_shortest_paths.hpp>
@@ -41,6 +40,7 @@ struct samargs {
     double alpha_g;
     int seed;
     int m0;
+    int run_mode;
 };
 
 struct Navigation_BFS{
@@ -101,8 +101,7 @@ class SamuraI {
     int m_dim;        // bin/ system dimension (1-4)
     int m_seed;       // SEED
     int m_m0;         // Number of connections of new node
-
-
+    
     std::vector<Vector4d> pos;  // vector with positions
     Vector4d center_of_mass;    // vector with center of mass
     Vector4d sum_positions;     // auxiliar vector to center of mass
@@ -154,7 +153,7 @@ class SamuraI {
     void writeDegrees(std::string fname);
     void writeConnections(std::string fname);
 	Navigation_BFS computeGlobalNavigation_BFS(void);
-    Navigation_COST computeGlobalNavigationDijkstraAuto(void);    
+    Navigation_COST computeGlobalNavigationDijkstraExact(void);    
     
     void writeGML(std::string fname);
     void add_weighted_edge(int u, int v);

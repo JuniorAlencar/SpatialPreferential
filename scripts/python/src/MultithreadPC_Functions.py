@@ -6,12 +6,27 @@ import re
 import json
 from pathlib import Path
 
-def JsonGenerate(N, alpha_a, alpha_g, dim, m0):
+def JsonGenerate(N: int, alpha_a : float, alpha_g : float, dim : int, m0 : int, run_mode : int):
+
+    """
+        N: number of nodes,\n
+        alpha_a: expoential of distances between nodes\n
+        alpha_g: expoential of power law distances\n
+        dim: dimension of imerse network\n
+        m0: number of connections of each new nodes\n
+        run_mode: Decides what will be calculated\n
+        props = 1 - just network\n
+        props = 2 - just properties\n
+        props = 3 - network and properties\n
+    """
+    
+    if run_mode not in {1, 2, 3}: raise ValueError("run_mode must be 1 (props), 2 (network) or 3 (both).")
+    
     filename = f"N{N}_a{alpha_a:.2f}_g{alpha_g:.2f}_d{dim}_m0_{m0}.json"
     outdir = Path(f"../../parms_pc_{N}")
     outdir.mkdir(parents=True, exist_ok=True)
     path = outdir / filename
-
+    
     data = {
         "comment": "use seed= -1 for random seed",
         "num_vertices": N,
@@ -22,6 +37,7 @@ def JsonGenerate(N, alpha_a, alpha_g, dim, m0):
         "dim": dim,
         "seed": -1,
         "m0": m0,
+        "run_mode" : int(run_mode)
     }
 
     with open(path, "w", encoding="utf-8") as f:

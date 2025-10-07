@@ -55,9 +55,9 @@ def process_distance_file(index_file_tuple):
     return i, distances, os.path.basename(file)
 
 
-def distance_file(N):
+def distance_file(N, m0):
     """Processa todos os arquivos dentro de N, independentemente de dim, alpha_a e alpha_g."""
-    base_folder = f"../../data/N_{N}"
+    base_folder = f"../../data/N_{N}/m0_{m0}"
 
     if not os.path.exists(base_folder):
         print(f"Pasta {base_folder} não existe.")
@@ -158,9 +158,9 @@ def process_file(index_file_tuple):
     return i, degrees, os.path.basename(file)
 
 
-def degree_file(N):
+def degree_file(N, m0):
     """Processa todos os arquivos dentro de N, extraindo os graus dos nós."""
-    base_folder = f"../../data/N_{N}"
+    base_folder = f"../../data/N_{N}/m0_{m0}"
 
     if not os.path.exists(base_folder):
         print(f"Pasta {base_folder} não existe.")
@@ -237,15 +237,15 @@ def degree_file(N):
 
     print(f"\nProcessamento total concluído para N = {N}.")
 
-def degree_file_filter(N):
+def degree_file_filter(N, m0):
     """Processa arquivos dentro de N variando alpha_a ou alpha_g conforme os critérios definidos."""
-    base_folder = f"../../data/N_{N}"
+    base_folder = f"../../data/N_{N}/m0_{m0}"
 
     if not os.path.exists(base_folder):
         print(f"Pasta {base_folder} não existe.")
         return
 
-    alpha_a_v = [round(i, 1) for i in np.arange(2.0, 10.0, 0.5)]
+    alpha_a_v = [round(i, 1) for i in np.arange(0.0, 10.0, 0.5)]
     alpha_g_v = [round(i, 1) for i in np.arange(1.0, 10.0, 0.5)]
     alpha_g_f = 2.0
     alpha_a_f = 2.0
@@ -392,15 +392,15 @@ def distribution(degree, save=False, **kwargs):
 
         # Se save=True, salvar os dados
         if save:
-            required_keys = ["N", "dim", "alpha_a", "alpha_g"]
+            required_keys = ["N", "m0" ,"dim", "alpha_a", "alpha_g"]
             if not all(arg in kwargs for arg in required_keys):
                 raise ValueError(f"Se save=True, os argumentos {required_keys} devem ser fornecidos.")
 
             # Obtém os valores das variáveis
-            N, dim, alpha_a, alpha_g = kwargs["N"], kwargs["dim"], kwargs["alpha_a"], kwargs["alpha_g"]
+            N, m0, dim, alpha_a, alpha_g = kwargs["N"], kwargs["m0"], kwargs["dim"], kwargs["alpha_a"], kwargs["alpha_g"]
 
             # Define o caminho do arquivo
-            save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/degree_distribution_linear.csv"
+            save_path = f"../../data/N_{N}/m0_{m0}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/degree_distribution_linear.csv"
 
             # Salva os dados
             df = pd.DataFrame(data={"k": k_real, "pk": p_real})
@@ -457,16 +457,17 @@ def log_binning(counter_dict, bin_count, save=False, **kwargs):
         
             # Salvar
             if save:
-                required_keys = ["N", "dim", "alpha_a", "alpha_g"]
+                required_keys = ["N", "m0", "dim", "alpha_a", "alpha_g"]
                 if not all(arg in kwargs for arg in required_keys):
                     raise ValueError(f"Se save=True, precisa de {required_keys}.")
 
                 N = kwargs["N"]
+                m0 = kwargs["m0"]
                 dim = kwargs["dim"]
                 alpha_a = kwargs["alpha_a"]
                 alpha_g = kwargs["alpha_g"]
                 
-                save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/degree_distribution_log.csv"
+                save_path = f"../../data/N_{N}/m0_{m0}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/degree_distribution_log.csv"
                 df = pd.DataFrame({"k": k, "pk": Pk})
                 df.to_csv(save_path, sep=' ', index=False)
                 print(f"Arquivo salvo em {save_path}")
@@ -496,16 +497,17 @@ def log_binning_distances(distances: np.ndarray[float], n_bins: int ,save: bool,
 
         # Salvar
         if save:
-            required_keys = ["N", "dim", "alpha_a", "alpha_g"]
+            required_keys = ["N", "m0" ,"dim", "alpha_a", "alpha_g"]
             if not all(arg in kwargs for arg in required_keys):
                 raise ValueError(f"Se save=True, precisa de {required_keys}.")
 
             N = kwargs["N"]
+            m0 = kwargs["m0"]
             dim = kwargs["dim"]
             alpha_a = kwargs["alpha_a"]
             alpha_g = kwargs["alpha_g"]
 
-            save_path = f"../../data/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/distances_distribution_log.csv"
+            save_path = f"../../data/N_{N}/m0_{m0}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/distances_distribution_log.csv"
             columns = {"distances": ["ds", "pds"]}
             df = pd.DataFrame({"ds": bin_widhs, "pds": pdf})
             df.to_csv(save_path, sep=' ', index=False)
@@ -728,15 +730,15 @@ def distance_file(N):
 
     print(f"\nProcessamento total concluído para N = {N}.")
 
-def distance_file_filter(N):
+def distance_file_filter(N, m0):
     """Processa arquivos dentro de N variando alpha_a ou alpha_g conforme os critérios definidos."""
-    base_folder = f"../../data/N_{N}"
+    base_folder = f"../../data/N_{N}/m0_{m0}"
 
     if not os.path.exists(base_folder):
         print(f"Pasta {base_folder} não existe.")
         return
 
-    alpha_a_v = [round(i, 1) for i in np.arange(2.0, 10.0, 0.5)]
+    alpha_a_v = [round(i, 1) for i in np.arange(0.0, 10.0, 0.5)]
     alpha_g_v = [round(i, 1) for i in np.arange(1.0, 10.0, 0.5)]
     alpha_g_f = 2.0
     alpha_a_f = 2.0
@@ -839,10 +841,6 @@ def distance_file_filter(N):
         print(f"Processamento concluído em {output_dir}. Dados salvos.")
 
     print(f"\nProcessamento total concluído para N = {N}.")
-
-# Exemplo de execução:
-# distance_file(N=5000)
-
 
 def combine_estimates_from_datasets(k_list, pk_list, dim, alpha_a=2.0,
                                      q_initial=1.333, b_initial=0.40,
@@ -1062,7 +1060,7 @@ def round_measurement(value, error):
 
 
 
-def save_json_distributions(N: int, dim: list[int], alpha_a_v: list[float], alpha_g_v: list[float]):
+def save_json_distributions(N: int, m0: int ,dim: list[int], alpha_a_v: list[float], alpha_g_v: list[float]):
     """
         N (int): Number of nodes in network
         dim (list(int)): list of all values of dimensions used
@@ -1083,7 +1081,7 @@ def save_json_distributions(N: int, dim: list[int], alpha_a_v: list[float], alph
             "npy_name": "distances.npy",
             "csv_columns": ["ds", "pds"],
             "data_list": data_distance,
-            "output_path": '../../data/distances_distributions.json'
+            "output_path": f'../../data/N_{N}/m0_{m0}/distances_distributions.json'
         },
         {
             "name": "degree",
@@ -1091,7 +1089,7 @@ def save_json_distributions(N: int, dim: list[int], alpha_a_v: list[float], alph
             "npy_name": "degree.npy",
             "csv_columns": ["k", "pk"],
             "data_list": data_degree,
-            "output_path": '../../data/degree_distributions.json'
+            "output_path": f'../../data/N_{N}/m0_{m0}/degree_distributions.json'
         }
     ]
 
@@ -1099,7 +1097,7 @@ def save_json_distributions(N: int, dim: list[int], alpha_a_v: list[float], alph
         for t in types:
             # Loop variando alpha_g
             for alpha_g in alpha_g_v:
-                folder = f"../../data/N_{N}/dim_{d}/alpha_a_{alpha_ag_f:.2f}_alpha_g_{alpha_g:.2f}"
+                folder = f"../../data/N_{N}/m0_{m0}/dim_{d}/alpha_a_{alpha_ag_f:.2f}_alpha_g_{alpha_g:.2f}"
                 try:
                     df = pd.read_csv(os.path.join(folder, t["csv_name"]), delimiter=' ')
                     dados = np.load(os.path.join(folder, t["npy_name"]))
@@ -1132,7 +1130,7 @@ def save_json_distributions(N: int, dim: list[int], alpha_a_v: list[float], alph
 
             # Loop variando alpha_a
             for alpha_a in alpha_a_v:
-                folder = f"../../data/N_{N}/dim_{d}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_ag_f:.2f}"
+                folder = f"../../data/N_{N}/m0_{m0}/dim_{d}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_ag_f:.2f}"
                 try:
                     df = pd.read_csv(os.path.join(folder, t["csv_name"]), delimiter=' ')
                     dados = np.load(os.path.join(folder, t["npy_name"]))
