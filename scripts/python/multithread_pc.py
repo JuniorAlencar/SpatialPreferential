@@ -22,7 +22,7 @@ import pandas as pd
 # N = [2**12, 2**13, 2**14, 2**15, 2**16, 2**17]
 # NumSamples = [10000, 5000, 2500, 1000, 500, 100]
 N = [10**5]
-NumSamples = [100]
+NumSamples = [29]
 # alpha_a = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
 # alpha_g = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
 
@@ -31,10 +31,10 @@ alpha_g = [1.0, 2.0, 3.0, 4.0, 5.0]
 
 alpha_ag_f = 2.0
 
-m0 = 1
+m0 = 2
 dim = [1,2,3,4]
 
-run_mode=1 # Just Network
+run_mode=2 # Just Network
 parms = {"N":[], "dim":[], "alpha_a":[], "alpha_g":[], "m0":[]}
 
 #for n in N:
