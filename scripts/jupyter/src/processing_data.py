@@ -9,6 +9,9 @@ import numpy as np
 # =========================
 # Auxiliares já usadas antes
 # =========================
+def create_folders(folder_path):
+    os.makedirs(folder_path, exist_ok=True)
+    print(f"Directory '{folder_path}' ensured to exist.")
 
 dict_keys = ["filename","ShortestCost","ShortestBFS",
              "R_Spearman","R_Spearman_err","R_Newman","R_Newman_err",
