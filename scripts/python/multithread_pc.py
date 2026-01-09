@@ -22,7 +22,7 @@ import pandas as pd
 # N = [2**12, 2**13, 2**14, 2**15, 2**16, 2**17]
 # NumSamples = [10000, 5000, 2500, 1000, 500, 100]
 N = [10**5]
-NumSamples = [29]
+NumSamples = [30]
 # alpha_a = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
 # alpha_g = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
 
@@ -55,11 +55,13 @@ for i in range(len(N)):
             parms["alpha_a"].append(alpha_ag_f)
             parms["alpha_g"].append(ag)
             parms["m0"].append(m0)
-    FunctionsFile.multithread_pc(N[i], NumSamples[i])
-    FunctionsFile.permission_run(N[i])
 
 df = pd.DataFrame(data=parms)
 df.to_csv("parameters.csv",sep=",")
+
+for i in range(len(N)):
+    FunctionsFile.multithread_pc(N[i], NumSamples[i])
+    FunctionsFile.permission_run(N[i])
 
 #for j in range(len(N)):
 #FunctionsFile.multithread_pc(N, N_s)
