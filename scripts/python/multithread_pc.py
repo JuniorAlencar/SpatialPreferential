@@ -26,8 +26,8 @@ NumSamples = [30]
 # alpha_a = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
 # alpha_g = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
 
-alpha_a = [2.0, 3.0, 4.0, 5.0]
-alpha_g = [1.0, 2.0, 3.0, 4.0, 5.0]
+alpha_a = [0.0, 1.0]
+#alpha_g = [1.0, 2.0, 3.0, 4.0, 5.0]
 
 alpha_ag_f = 2.0
 
@@ -47,13 +47,6 @@ for i in range(len(N)):
             parms["dim"].append(d)
             parms["alpha_a"].append(aa)
             parms["alpha_g"].append(alpha_ag_f)
-            parms["m0"].append(m0)
-        for ag in alpha_g:
-            FunctionsFile.JsonGenerate(N[i], alpha_ag_f, ag, d, m0, run_mode)
-            parms["N"].append(N[i])
-            parms["dim"].append(d)
-            parms["alpha_a"].append(alpha_ag_f)
-            parms["alpha_g"].append(ag)
             parms["m0"].append(m0)
 
 df = pd.DataFrame(data=parms)
