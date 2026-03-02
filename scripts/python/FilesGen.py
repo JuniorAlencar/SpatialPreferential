@@ -9,22 +9,20 @@ import os
 #text_terminal()                                    -> return .txt with text to run codes in cluster
 #------------------------------------------------------------------------------------------
 
-N = [2**12, 2**13, 2**14, 2**15, 2**16, 2**17]
-alpha_a = [0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0]
-alpha_g = [1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 3.0]
-alpha_ag_f = 2.0
-NumSamples = [900, 300, 200, 100, 50, 10]
+N = [10**5]
+alpha_a = [0.0, 1.0, 2.0, 3.0, 4.0]
+alpha_g = [1.0, 2.0, 3.0, 4.0]
+#alpha_ag_f = 2.0
+NumSamples = [40]
 m0 = 2
-dim = [1,2,3,4]
-run_mode = 1
+dim = [2,3,4]
+run_mode = 2
 
-for i in range(len(N)):
-    for d in dim:
+
+for d in dim:
+    for ag in alpha_g:
         for aa in alpha_a:
-            FunctionsFile.JsonGenerate(N[i], aa, alpha_ag_f, d, m0, run_mode)
-            FunctionsFile.ScriptGenerate(N[i], aa, alpha_ag_f, d, NumSamples[i], m0)
-        for ag in alpha_g:
-            FunctionsFile.JsonGenerate(N[i], alpha_ag_f, ag, d, m0, run_mode)
-            FunctionsFile.ScriptGenerate(N[i], alpha_ag_f, ag, d, NumSamples[i], m0)
+            FunctionsFile.JsonGenerate(N[0], aa, ag, d, m0, run_mode)
+            FunctionsFile.ScriptGenerate(N[0], aa, ag, d, NumSamples[0], m0)
 
 FunctionsFile.text_terminal()

@@ -1,6 +1,6 @@
 {
     "comment": "use seed= -1 for random seed",
-    "num_vertices": 10000,
+    "num_vertices": 100000,
     "alpha_a": 2.0,
     "alpha_g": 2.0,
     "r_min": 1,
@@ -8,6 +8,6 @@
     "dim": 2,
     "seed": -1,
     "m0": 2,
-    "_comment": "use run_mode 1 to network, 2 to properties, 3 to both",
-    "run_mode":3
+    "_comment": "use run_mode 1 to properties, 2 to network, 3 to both",
+    "run_mode":2
 }
