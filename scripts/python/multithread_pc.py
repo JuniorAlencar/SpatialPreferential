@@ -18,12 +18,12 @@ import pandas as pd
 
 
 N = [10**5]
-alpha_a = [0.0, 1.0, 2.0, 3.0, 4.0]
+alpha_a = [6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0]
 alpha_g = [1.0, 2.0, 3.0, 4.0]
 #alpha_ag_f = 2.0
 NumSamples = [10]
 m0 = 2
-dim = [2,3,4]
+dim = [2]
 run_mode = 2
 
 #for n in N:
@@ -32,7 +32,6 @@ for d in dim:
     for ag in alpha_g:
         for aa in alpha_a:
             FunctionsFile.JsonGenerate(N[0], aa, ag, d, m0, run_mode)
-
 
 FunctionsFile.multithread_pc(N[0], NumSamples[0])
 FunctionsFile.permission_run(N[0])
