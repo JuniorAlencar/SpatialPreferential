@@ -9,6 +9,7 @@ import pyarrow.parquet as pq
 import pyarrow as pa
 import gc
 import os
+import shutil
 import pandas as pd
 
 
@@ -73,16 +74,23 @@ def _parse_value(raw: str):
 def extract_gml_gz_light(fp: Path):
     """
     Extrai nodes/edges de um .gml.gz (ou .gml) sem construir grafo.
-    Suporta blocos em:
-      - "node ["  (mesma linha)
-      - "node" + "[" (linhas separadas)  <-- seu caso
-      - idem para "edge" e "graphics"
 
-    Output (mesmo de antes):
-      nodes: ID_vertex, pos=[x,y,z], degree, ID_sample
-      edges: edge=[source,target], distance, ID_samples
+    OUTPUT NOVO:
+      nodes: Id, x, y, z, deg, seed(int)
+      edges: source, target, len, seed(int)
+
+    OBS: manifest continua trabalhando com fp.name (ex: gml_123.gml.gz)
     """
-    sample_name = fp.name
+    sample_name = fp.name  # ex: gml_123.gml.gz
+
+    # seed numérica a partir do nome
+    mseed = re.search(r"gml_(\d+)\.gml\.gz$", sample_name)
+    if mseed:
+        seed_num = int(mseed.group(1))
+    else:
+        # fallback: primeiro bloco numérico
+        m2 = re.search(r"(\d+)", sample_name)
+        seed_num = int(m2.group(1)) if m2 else -1
 
     node_rows = []
     edge_rows = []
@@ -91,10 +99,8 @@ def extract_gml_gz_light(fp: Path):
     cur_node = None
     cur_edge = None
     cur_graphics = None
+    pending_key = None
 
-    pending_key = None  # guarda "node"/"edge"/"graphics" quando aparecem sozinhos
-
-    # abre como gzip se for .gz, senão texto normal
     if fp.suffix == ".gz":
         opener = lambda: gzip.open(fp, "rt", encoding="utf-8", errors="replace")
     else:
@@ -106,16 +112,19 @@ def extract_gml_gz_light(fp: Path):
 
         if key == "node":
             cur_node = {
-                "ID_vertex": None,
-                "pos": [None, None, None],
-                "degree": None,
-                "ID_sample": sample_name,
+                "Id": None,
+                "x": None,
+                "y": None,
+                "z": None,
+                "deg": None,
+                "seed": seed_num,
             }
         elif key == "edge":
             cur_edge = {
-                "edge": [None, None],
-                "distance": None,
-                "ID_samples": sample_name,
+                "source": None,
+                "target": None,
+                "len": None,
+                "seed": seed_num,
             }
         elif key == "graphics":
             cur_graphics = {"x": None, "y": None, "z": None}
@@ -126,31 +135,26 @@ def extract_gml_gz_light(fp: Path):
             if not s:
                 continue
 
-            # 1) "node" / "edge" / "graphics" sozinho (o "[" vem na próxima linha)
             if s in ("node", "edge", "graphics"):
                 pending_key = s
                 continue
 
-            # 2) "[" sozinho -> abre bloco pendente
             if s == "[":
                 if pending_key is not None:
                     open_block(pending_key)
                     pending_key = None
                 continue
 
-            # 3) "node [" (mesma linha)
             if s.endswith("["):
                 key = s[:-1].strip()
                 if key in ("node", "edge", "graphics"):
                     open_block(key)
                     pending_key = None
                     continue
-                # outros blocos não usados -> empilha só o nome
                 stack.append(key)
                 pending_key = None
                 continue
 
-            # 4) fechamento de bloco
             if s.startswith("]"):
                 if not stack:
                     pending_key = None
@@ -159,11 +163,9 @@ def extract_gml_gz_light(fp: Path):
                 key = stack.pop()
 
                 if key == "graphics" and cur_node is not None and cur_graphics is not None:
-                    cur_node["pos"] = [
-                        cur_graphics.get("x"),
-                        cur_graphics.get("y"),
-                        cur_graphics.get("z"),
-                    ]
+                    cur_node["x"] = cur_graphics.get("x")
+                    cur_node["y"] = cur_graphics.get("y")
+                    cur_node["z"] = cur_graphics.get("z")
                     cur_graphics = None
 
                 elif key == "node" and cur_node is not None:
@@ -177,7 +179,6 @@ def extract_gml_gz_light(fp: Path):
                 pending_key = None
                 continue
 
-            # 5) linha "key value"
             m = KV_RE.match(s)
             if not m or not stack:
                 continue
@@ -188,9 +189,9 @@ def extract_gml_gz_light(fp: Path):
 
             if ctx == "node" and cur_node is not None:
                 if k == "id":
-                    cur_node["ID_vertex"] = v
+                    cur_node["Id"] = v
                 elif k == "degree":
-                    cur_node["degree"] = v
+                    cur_node["deg"] = v
 
             elif ctx == "graphics" and cur_graphics is not None:
                 if k in ("x", "y", "z"):
@@ -198,11 +199,11 @@ def extract_gml_gz_light(fp: Path):
 
             elif ctx == "edge" and cur_edge is not None:
                 if k == "source":
-                    cur_edge["edge"][0] = v
+                    cur_edge["source"] = v
                 elif k == "target":
-                    cur_edge["edge"][1] = v
+                    cur_edge["target"] = v
                 elif k == "distance":
-                    cur_edge["distance"] = v
+                    cur_edge["len"] = v
 
     return node_rows, edge_rows, sample_name
 
@@ -210,8 +211,8 @@ def extract_gml_gz_light(fp: Path):
 # -------------------------
 # Parquet helpers
 # -------------------------
-def find_existing_parquet(save_dir: Path, kind: str, N: int, m0: int, alpha_a_str: str, alpha_g_str: str):
-    pat = f"{kind}_N_{N}_m0_{m0}_alpha_a_{alpha_a_str}_alpha_g_{alpha_g_str}_Ns_*.parquet"
+def find_existing_parquet(save_dir: Path, kind: str, N: int, dim: int, m0: int, alpha_a: float, alpha_g: float):
+    pat = f"N{N}_d{dim}_m{m0}_G{fmt1(alpha_g)}_A{fmt1(alpha_a)}_seed001to*_{kind}.parquet"
     candidates = list(save_dir.glob(pat))
     if not candidates:
         return None
@@ -283,12 +284,13 @@ def _safe_remove_old_parquets_except(
     save_dir: Path,
     kind: str,
     N_value: int,
+    dim: int,
     m0: int,
-    alpha_a_str: str,
-    alpha_g_str: str,
+    alpha_a: float,
+    alpha_g: float,
     keep: Path | None,
 ):
-    pat = f"{kind}_N_{N_value}_m0_{m0}_alpha_a_{alpha_a_str}_alpha_g_{alpha_g_str}_Ns_*.parquet"
+    pat = f"N{N_value}_d{dim}_m{m0}_G{fmt1(alpha_g)}_A{fmt1(alpha_a)}_seed001to*_{kind}.parquet"
     for p in save_dir.glob(pat):
         if keep is not None and p.resolve() == keep.resolve():
             continue
@@ -392,6 +394,13 @@ def _rewrite_parquet_streaming_append_delta(
     # ajuda GC
     gc.collect()
 
+def fmt1(x: float) -> str:
+    return f"{x:.1f}"
+
+def parquet_name_new(kind: str, N: int, dim: int, m0: int, alpha_a: float, alpha_g: float, Ns: int) -> str:
+    # kind: "nodes" ou "edges"
+    return f"N{N}_d{dim}_m{m0}_G{fmt1(alpha_g)}_A{fmt1(alpha_a)}_seed001to{Ns:03d}_{kind}.parquet"
+
 # -------------------------
 # Main entrypoint for notebook
 # -------------------------
@@ -431,6 +440,11 @@ def update_parquets_for_N(
         save_dir = gml_dir.parent  # .../alpha_a_*_alpha_g_*
 
         m0, dim, alpha_a, alpha_g = parse_combo_from_path(save_dir)
+        print(
+            f"[PROCESSANDO] "
+            f"N={N_value} | m0={m0} | dim={dim} | "
+            f"alpha_a={alpha_a:.2f} | alpha_g={alpha_g:.2f}"
+        )
         if (m0 is None) or (dim is None) or (alpha_a is None) or (alpha_g is None):
             if debug:
                 print(f"[SKIP] combo inválida: {save_dir}")
@@ -456,22 +470,36 @@ def update_parquets_for_N(
 
         # Se manifest não existe, cria a partir do parquet existente (uma vez)
         if not mf.exists():
-            nodes_pq0 = find_existing_parquet(save_dir, "nodes", N_value, m0, alpha_a_str, alpha_g_str)
-            edges_pq0 = find_existing_parquet(save_dir, "edges", N_value, m0, alpha_a_str, alpha_g_str)
+            nodes_pq0 = find_existing_parquet(save_dir, "nodes", N_value, dim, m0, alpha_a, alpha_g)
+            edges_pq0 = find_existing_parquet(save_dir, "edges", N_value, dim, m0, alpha_a, alpha_g)
 
             samples = []
+
             if nodes_pq0 is not None:
                 try:
-                    df = pd.read_parquet(nodes_pq0, columns=["ID_sample"])
-                    samples = df["ID_sample"].astype(str).unique().tolist()
+                    # novo: seed numérica
+                    df = pd.read_parquet(nodes_pq0, columns=["seed"])
+                    seeds = df["seed"].dropna().astype(int).unique().tolist()
+                    samples = [f"gml_{s}.gml.gz" for s in seeds]
                 except Exception:
-                    samples = []
+                    # velho: ID_sample com string gml_*.gml.gz
+                    try:
+                        df = pd.read_parquet(nodes_pq0, columns=["ID_sample"])
+                        samples = df["ID_sample"].astype(str).unique().tolist()
+                    except Exception:
+                        samples = []
+
             elif edges_pq0 is not None:
                 try:
-                    df = pd.read_parquet(edges_pq0, columns=["ID_samples"])
-                    samples = df["ID_samples"].astype(str).unique().tolist()
+                    df = pd.read_parquet(edges_pq0, columns=["seed"])
+                    seeds = df["seed"].dropna().astype(int).unique().tolist()
+                    samples = [f"gml_{s}.gml.gz" for s in seeds]
                 except Exception:
-                    samples = []
+                    try:
+                        df = pd.read_parquet(edges_pq0, columns=["ID_samples"])
+                        samples = df["ID_samples"].astype(str).unique().tolist()
+                    except Exception:
+                        samples = []
 
             if samples:
                 write_manifest(mf, samples)
@@ -510,20 +538,30 @@ def update_parquets_for_N(
             continue
 
         # DataFrames delta (só novos)
-        df_nodes_new = pd.DataFrame(node_rows, columns=["ID_vertex", "pos", "degree", "ID_sample"]) if node_rows else pd.DataFrame(columns=["ID_vertex", "pos", "degree", "ID_sample"])
-        df_edges_new = pd.DataFrame(edge_rows, columns=["edge", "distance", "ID_samples"]) if edge_rows else pd.DataFrame(columns=["edge", "distance", "ID_samples"])
+        # DataFrames delta (só novos) - FORMATO NOVO + ORDEM
+        df_nodes_new = (
+            pd.DataFrame(node_rows, columns=["Id", "x", "y", "z", "deg", "seed"])
+            if node_rows else
+            pd.DataFrame(columns=["Id", "x", "y", "z", "deg", "seed"])
+        )
+
+        df_edges_new = (
+            pd.DataFrame(edge_rows, columns=["source", "target", "len", "seed"])
+            if edge_rows else
+            pd.DataFrame(columns=["source", "target", "len", "seed"])
+        )
 
         # ---------------------------
         # Descobre Ns antigo sem carregar tudo
         # ---------------------------
-        nodes_pq = find_existing_parquet(save_dir, "nodes", N_value, m0, alpha_a_str, alpha_g_str)
-        edges_pq = find_existing_parquet(save_dir, "edges", N_value, m0, alpha_a_str, alpha_g_str)
+        nodes_pq = find_existing_parquet(save_dir, "nodes", N_value, dim, m0, alpha_a, alpha_g)
+        edges_pq = find_existing_parquet(save_dir, "edges", N_value, dim, m0, alpha_a, alpha_g)
 
         Ns_old = len(done)  # manifest é a fonte de verdade
         Ns = Ns_old + len(new_files)
 
-        nodes_out = save_dir / f"nodes_N_{N_value}_m0_{m0}_alpha_a_{alpha_a_str}_alpha_g_{alpha_g_str}_Ns_{Ns}.parquet"
-        edges_out = save_dir / f"edges_N_{N_value}_m0_{m0}_alpha_a_{alpha_a_str}_alpha_g_{alpha_g_str}_Ns_{Ns}.parquet"
+        nodes_out = save_dir / parquet_name_new("nodes", N_value, dim, m0, alpha_a, alpha_g, Ns)
+        edges_out = save_dir / parquet_name_new("edges", N_value, dim, m0, alpha_a, alpha_g, Ns)
 
         # ---------------------------
         # STREAMING rewrite (old + delta)
@@ -532,8 +570,8 @@ def update_parquets_for_N(
         _rewrite_parquet_streaming_append_delta(edges_pq, df_edges_new, edges_out, batch_size=batch_size)
 
         # remove antigos, preservando o recém-criado
-        _safe_remove_old_parquets_except(save_dir, "nodes", N_value, m0, alpha_a_str, alpha_g_str, keep=nodes_out)
-        _safe_remove_old_parquets_except(save_dir, "edges", N_value, m0, alpha_a_str, alpha_g_str, keep=edges_out)
+        _safe_remove_old_parquets_except(save_dir, "nodes", N_value, dim, m0, alpha_a, alpha_g, keep=nodes_out)
+        _safe_remove_old_parquets_except(save_dir, "edges", N_value, dim, m0, alpha_a, alpha_g, keep=edges_out)
 
         # ---------------------------
         # Atualiza manifest
@@ -635,9 +673,6 @@ def create_manifest_from_existing_parquets(
 
     return n_written
 
-import os
-import shutil
-from pathlib import Path
 
 
 def _is_manifest_txt(fname: str) -> bool:
@@ -652,66 +687,90 @@ def _safe_prefix_from_relpath(relpath: Path) -> str:
     parts = [p for p in relpath.parts if p not in ("", ".")]
     return "_".join(parts) if parts else "ROOT"
 
+# aceita seu novo padrão (nodes|edges)
+NEW_PQ_RE = re.compile(
+    r"^N(?P<N>\d+)_d(?P<dim>\d+)_m(?P<m>\d+)_G(?P<G>\d+(?:\.\d+)?)_A(?P<A>\d+(?:\.\d+)?)_seed001to(?P<Ns>\d+)_(?P<kind>nodes|edges)\.parquet$"
+)
 
-def copy_all_parquet_and_manifests_flat(root_dir, out_dir="../../Data_Tsallis"):
+def _extract_dim_from_new_parquet_name(fname: str) -> int | None:
+    m = NEW_PQ_RE.match(fname)
+    if not m:
+        return None
+    return int(m.group("dim"))
+
+
+def copy_all_parquet_flat_by_dim(root_dir, out_dir="../../Data_Tsallis"):
     """
-    Copia todos:
-      - *.parquet
-      - manifest_*.txt
-    para UMA ÚNICA pasta.
-
-    Nome final:
-      <estrutura_relativa>_<nome_original>
+    NOVA ESTRUTURA:
+      - Copia apenas *.parquet no padrão novo:
+          N{N}_d{dim}_m{m}_G{G}_A{A}_seed001to{Ns}_{nodes|edges}.parquet
+      - Organiza em:
+          out_dir/Dim_<dim>/
+      - NÃO copia manifest.
+      - NÃO prefixa nome com caminho relativo (não precisa mais).
     """
-
     root_dir = Path(root_dir).resolve()
     out_dir = Path(out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     copied = 0
+    skipped_pattern = 0
+    created_dirs = 0
 
     for dirpath, _, filenames in os.walk(root_dir):
         dirpath = Path(dirpath)
-        rel = dirpath.relative_to(root_dir)
-        prefix = _safe_prefix_from_relpath(rel)
 
         for fname in filenames:
-            if not (fname.endswith(".parquet") or _is_manifest_txt(fname)):
+            if not fname.endswith(".parquet"):
                 continue
 
+            dim = _extract_dim_from_new_parquet_name(fname)
+            if dim is None:
+                skipped_pattern += 1
+                continue
+
+            dst_dim_dir = out_dir / f"Dim_{dim}"
+            if not dst_dim_dir.exists():
+                dst_dim_dir.mkdir(parents=True, exist_ok=True)
+                created_dirs += 1
+
             src = dirpath / fname
-            dst = out_dir / f"{prefix}_{fname}"
+            dst = dst_dim_dir / fname
 
             shutil.copy2(src, dst)
             copied += 1
 
-    print(f"[OK] Flat copy -> {out_dir}")
-    print(f"     files_copied={copied}")
+    print(f"[OK] Flat copy by Dim -> {out_dir}")
+    print(f"     dirs_created={created_dirs} files_copied={copied} skipped_pattern={skipped_pattern}")
 
-def copy_tree_only_parquet_and_manifests(root_dir, out_root="../../Data_Network"):
+def copy_tree_only_new_parquet(root_dir, out_root="../../Data_Network"):
     """
-    Espelha a estrutura inteira,
-    copiando apenas:
-      - *.parquet
-      - manifest_*.txt
+    NOVA ESTRUTURA (mirrored):
+      - Espelha a estrutura inteira de root_dir -> out_root
+      - Copia APENAS *.parquet que batem o padrão novo (NEW_PQ_RE)
+      - NÃO copia manifest
     """
-
     root_dir = Path(root_dir).resolve()
     out_root = Path(out_root).resolve()
     out_root.mkdir(parents=True, exist_ok=True)
 
     copied = 0
     created_dirs = 0
+    skipped_pattern = 0
 
     for dirpath, _, filenames in os.walk(root_dir):
         dirpath = Path(dirpath)
         rel = dirpath.relative_to(root_dir)
         dst_dir = out_root / rel
 
-        selected = [
-            f for f in filenames
-            if f.endswith(".parquet") or _is_manifest_txt(f)
-        ]
+        selected = []
+        for f in filenames:
+            if not f.endswith(".parquet"):
+                continue
+            if _extract_dim_from_new_parquet_name(f) is None:
+                skipped_pattern += 1
+                continue
+            selected.append(f)
 
         if not selected:
             continue
@@ -724,5 +783,78 @@ def copy_tree_only_parquet_and_manifests(root_dir, out_root="../../Data_Network"
             shutil.copy2(dirpath / fname, dst_dir / fname)
             copied += 1
 
-    print(f"[OK] Mirrored tree (filtered) -> {out_root}")
-    print(f"     dirs_created={created_dirs} files_copied={copied}")
+    print(f"[OK] Mirrored tree (new parquet only) -> {out_root}")
+    print(f"     dirs_created={created_dirs} files_copied={copied} skipped_pattern={skipped_pattern}")
+
+def copy_tree_new_parquet_grouped_by_dim(root_dir, out_root="../../Data_Network"):
+    """
+    NOVA ESTRUTURA (Dim + mirrored):
+      - Copia APENAS *.parquet padrão novo
+      - Organiza como:
+          out_root/Dim_<dim>/<estrutura_relativa>/<arquivo.parquet>
+      - NÃO copia manifest
+    """
+    root_dir = Path(root_dir).resolve()
+    out_root = Path(out_root).resolve()
+    out_root.mkdir(parents=True, exist_ok=True)
+
+    copied = 0
+    created_dirs = 0
+    skipped_pattern = 0
+
+    for dirpath, _, filenames in os.walk(root_dir):
+        dirpath = Path(dirpath)
+        rel = dirpath.relative_to(root_dir)
+
+        for fname in filenames:
+            if not fname.endswith(".parquet"):
+                continue
+
+            dim = _extract_dim_from_new_parquet_name(fname)
+            if dim is None:
+                skipped_pattern += 1
+                continue
+
+            dst_dir = out_root / f"Dim_{dim}" / rel
+            if not dst_dir.exists():
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                created_dirs += 1
+
+            shutil.copy2(dirpath / fname, dst_dir / fname)
+            copied += 1
+
+    print(f"[OK] Tree copy grouped by Dim -> {out_root}")
+    print(f"     dirs_created={created_dirs} files_copied={copied} skipped_pattern={skipped_pattern}")
+
+def remove_all_gml_gz(root_dir):
+    """
+    Percorre a estrutura de diretórios a partir de root_dir,
+    entra em cada pasta chamada 'gml' e remove todos os arquivos *.gml.gz.
+    """
+
+    root_dir = Path(root_dir).resolve()
+
+    removed = 0
+    scanned_dirs = 0
+
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        dirpath = Path(dirpath)
+
+        # só agir se a pasta se chama 'gml'
+        if dirpath.name != "gml":
+            continue
+
+        scanned_dirs += 1
+
+        for fname in filenames:
+            if fname.endswith(".gml.gz"):
+                fpath = dirpath / fname
+                try:
+                    fpath.unlink()
+                    removed += 1
+                except Exception as e:
+                    print(f"ERRO ao remover {fpath}: {e}")
+
+    print(f"[OK] Limpeza concluída")
+    print(f"     pastas_gml_verificadas={scanned_dirs}")
+    print(f"     arquivos_removidos={removed}")
