@@ -4,8 +4,8 @@ set -euo pipefail
 # ========= CONFIG =========
 REMOTE="gdrive:SpatialData/Data_Tsallis"
 
-# Script em: SpatialPreferential/scripts/shells/
-# Dados em:  SpatialPreferential/Data_Tsallis/
+# Ajuste para a pasta onde você gerou os parquets novos (recomendado):
+# Ex.: ../../data_rewrite
 LOCAL_BASE="../../Data_Tsallis"
 
 TRANSFERS=8
@@ -26,30 +26,43 @@ rclone_run() {
   fi
 }
 
-# Extrai dim: ..._dim_4_... -> 4
+# -------- Parsing do nome (nomenclatura nova) --------
+# Exemplo:
+# N100000_d2_m2_G2.0_A3.0_seed001to061_nodes.parquet
+# N100000_d2_m2_G2.0_A3.0_seed001to061_edges.parquet
+
 get_dim() {
   local f="$1"
-  if [[ "$f" =~ _dim_([0-9]+)_ ]]; then
+  if [[ "$f" =~ _d([0-9]+)_ ]]; then
     echo "${BASH_REMATCH[1]}"
   else
     echo ""
   fi
 }
 
-# Extrai Ns: ..._Ns_30.parquet -> 30
-get_ns() {
+get_ns() { # num_samples
   local f="$1"
-  if [[ "$f" =~ _Ns_([0-9]+)\.parquet$ ]]; then
+  if [[ "$f" =~ _seed001to([0-9]+)_ ]]; then
     echo "${BASH_REMATCH[1]}"
   else
     echo ""
   fi
 }
 
-# Basekey: remove o sufixo _Ns_XX.parquet
+get_kind() {
+  local f="$1"
+  if [[ "$f" =~ _(nodes|edges)\.parquet$ ]]; then
+    echo "${BASH_REMATCH[1]}"
+  else
+    echo ""
+  fi
+}
+
+# basekey = tudo antes de _seed001toXXX_(nodes|edges).parquet
+# (isso inclui N..., d..., m..., G..., A...)
 get_basekey() {
   local f="$1"
-  echo "$f" | sed -E 's/_Ns_[0-9]+\.parquet$//'
+  echo "$f" | sed -E 's/_seed001to[0-9]+_(nodes|edges)\.parquet$//'
 }
 
 progress_bar() {
@@ -65,67 +78,109 @@ progress_bar() {
   printf "] %3d%% (%d/%d) faltam %d\n" "$pct" "$done" "$total" "$(( total - done ))"
 }
 
-# Remove do remote quaisquer arquivos com mesmo basekey e Ns menor que keep_ns
-cleanup_remote_smaller_ns() {
-  local remote_dim="$1"     # gdrive:.../Dim_X
-  local keep_file="$2"      # filename com maior Ns
-  local keep_base="$3"      # basekey
-  local keep_ns="$4"        # Ns inteiro
+# Lista remote de uma Dim (cache)
+load_remote_index_for_dim() {
+  local remote_dim="$1"
+  local tmp_list="$2"
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    log "DRY_RUN: cleanup remote $remote_dim (keep base=$keep_base Ns=$keep_ns)"
+    : > "$tmp_list"
     return
   fi
 
-  local tmp
-  tmp="$(mktemp)"
-  rclone lsf "$remote_dim" --files-only --include "*.parquet" > "$tmp" || true
+  rclone lsf "$remote_dim" --files-only --include "*.parquet" > "$tmp_list" || true
+}
+
+# maior seed001to no Drive para (base, kind) dentro de uma Dim
+remote_max_ns_for_key() {
+  local tmp_list="$1"
+  local base="$2"
+  local kind="$3"
+
+  local max=0
+  while IFS= read -r rf; do
+    local rkind rbase rns
+    rkind="$(get_kind "$rf")"
+    [[ "$rkind" != "$kind" ]] && continue
+
+    rbase="$(get_basekey "$rf")"
+    [[ "$rbase" != "$base" ]] && continue
+
+    rns="$(get_ns "$rf")"
+    [[ -z "$rns" ]] && continue
+
+    if (( rns > max )); then max="$rns"; fi
+  done < "$tmp_list"
+
+  echo "$max"
+}
+
+# remove do Drive seed001to menores que keep_ns para (base,kind)
+cleanup_remote_smaller_ns_cached() {
+  local remote_dim="$1"
+  local tmp_list="$2"
+  local base="$3"
+  local kind="$4"
+  local keep_ns="$5"
 
   while IFS= read -r rf; do
-    [[ "$rf" == "$keep_file" ]] && continue
+    local rkind rbase rns
+    rkind="$(get_kind "$rf")"
+    [[ "$rkind" != "$kind" ]] && continue
 
-    local rbase rns
     rbase="$(get_basekey "$rf")"
-    [[ "$rbase" != "$keep_base" ]] && continue
+    [[ "$rbase" != "$base" ]] && continue
 
     rns="$(get_ns "$rf")"
     [[ -z "$rns" ]] && continue
 
     if (( rns < keep_ns )); then
-      log "Remote cleanup: deleting $remote_dim/$rf (keeping Ns=$keep_ns)"
+      log "Remote cleanup: deleting $remote_dim/$rf (keeping seed001to=$keep_ns)"
       rclone_run deletefile "$remote_dim/$rf"
     fi
-  done < "$tmp"
-
-  rm -f "$tmp"
+  done < "$tmp_list"
 }
 
-# ===== Passo 1: construir plano global (um upload por basekey+dim, escolhendo maior Ns) =====
-# Linha: dim|basekey|Ns|abs_path|filename
+# -------- Plano local: mantém só o maior seed001to por (dim, base, kind) --------
+# Saída por linha:
+# dim|base|kind|ns|abs_path|filename
 build_plan() {
   local plan_file="$1"
   : > "$plan_file"
 
-  # Busca recursiva por parquet
-  local found_any=0
-  while IFS= read -r f; do
-    found_any=1
-    local bn dim ns base
-    bn="$(basename "$f")"
-
-    dim="$(get_dim "$bn")"
-    ns="$(get_ns "$bn")"
-    [[ -z "$dim" ]] && continue
-    [[ -z "$ns" ]] && continue
-
-    base="$(get_basekey "$bn")"
-    printf "%s|%s|%s|%s|%s\n" "$dim" "$base" "$ns" "$f" "$bn" >> "$plan_file"
-  done < <(find "$LOCAL_BASE" -type f -name "*.parquet" 2>/dev/null)
-
-  if [[ "$found_any" -eq 0 ]]; then
-    log "ERRO: não encontrei nenhum *.parquet em $LOCAL_BASE"
-    exit 1
-  fi
+  # Escolhe o maior ns por chave dim|base|kind sem depender do formato de G/A
+  find "$LOCAL_BASE" -type f -name "*.parquet" -print0 2>/dev/null \
+  | awk -v RS='\0' '
+      function bname(p,    t){ t=p; sub(/^.*\//, "", t); return t }
+      function get_dim(fn,   m){ return match(fn, /_d([0-9]+)_/, m) ? m[1] : "" }
+      function get_ns(fn,    m){ return match(fn, /_seed001to([0-9]+)_/, m) ? m[1] : "" }
+      function get_kind(fn,  m){ return match(fn, /_(nodes|edges)\.parquet$/, m) ? m[1] : "" }
+      function get_base(fn,  t){
+        t = bname(fn)
+        sub(/_seed001to[0-9]+_(nodes|edges)\.parquet$/, "", t)
+        return t
+      }
+      {
+        f=$0
+        fn=bname(f)
+        dim=get_dim(fn); ns=get_ns(fn); kind=get_kind(fn)
+        if (dim=="" || ns=="" || kind=="") next
+        base=get_base(f)
+        key=dim "|" base "|" kind
+        if (!(key in best) || (ns+0) > (best[key]+0)) {
+          best[key]=ns
+          best_abs[key]=f
+          best_fn[key]=fn
+        }
+      }
+      END {
+        for (k in best) {
+          split(k, a, "|")
+          dim=a[1]; base=a[2]; kind=a[3]
+          printf "%s|%s|%s|%s|%s|%s\n", dim, base, kind, best[k], best_abs[k], best_fn[k]
+        }
+      }
+    ' > "$plan_file"
 }
 
 main() {
@@ -135,66 +190,63 @@ main() {
     exit 1
   fi
 
-  local raw plan
-  raw="$(mktemp)"
+  local plan
   plan="$(mktemp)"
-
-  build_plan "$raw"
-
-  # Selecionar apenas o maior Ns por (dim, basekey)
-  # Fazemos isso via awk para não depender de arrays gigantes no bash.
-  awk -F'|' '
-    {
-      dim=$1; base=$2; ns=$3; abs=$4; bn=$5;
-      key=dim "|" base;
-      if (!(key in best) || ns+0 > best[key]+0) {
-        best[key]=ns; best_abs[key]=abs; best_bn[key]=bn;
-      }
-    }
-    END {
-      for (k in best) {
-        split(k, a, "|");
-        dim=a[1]; base=a[2];
-        printf "%s|%s|%s|%s|%s\n", dim, base, best[k], best_abs[k], best_bn[k];
-      }
-    }
-  ' "$raw" > "$plan"
-
-  rm -f "$raw"
+  build_plan "$plan"
 
   local total
   total="$(wc -l < "$plan" | tr -d ' ')"
   if [[ "$total" == "0" ]]; then
-    log "ERRO: nenhum arquivo bateu no padrão *_dim_<n>_*_Ns_<num>.parquet"
+    log "ERRO: nenhum parquet bateu no padrão dentro de $LOCAL_BASE"
+    log "Esperado: N*_d*_m*_G*_A*_seed001to###_(nodes|edges).parquet"
     rm -f "$plan"
     exit 1
   fi
 
-  log "Total de uploads planejados (maior Ns por dim+prefixo): $total"
+  log "Total de uploads planejados (maior seed001to por dim+base+kind): $total"
   log "Destino remoto: $REMOTE/Dim_<dim>/"
   [[ "$DRY_RUN" -eq 1 ]] && log "DRY_RUN=1 (nenhum upload/remoção será feito)"
 
-  # Ordena por dim e por Ns para ficar organizado
-  sort -t'|' -k1,1n -k3,3n "$plan" -o "$plan"
+  # Ordena por dim para reduzir listagens no remote
+  sort -t'|' -k1,1n -k4,4n "$plan" -o "$plan"
 
   local done=0
+  local current_dim=""
+  local remote_tmp=""
+  local remote_dim_path=""
 
-  while IFS='|' read -r dim base ns abs_file bn; do
+  while IFS='|' read -r dim base kind ns abs_file bn; do
     done=$((done + 1))
-
-    local remote_dim="$REMOTE/Dim_${dim}"
-
     progress_bar "$done" "$total"
-    log "Transferindo agora: dim=$dim | Ns=$ns"
+
+    # Troca de dim => recarrega índice remoto dessa Dim
+    if [[ "$dim" != "$current_dim" ]]; then
+      current_dim="$dim"
+      remote_dim_path="$REMOTE/Dim_${dim}"
+      log "== Indexando remoto: $remote_dim_path =="
+      [[ -n "${remote_tmp:-}" ]] && rm -f "$remote_tmp" || true
+      remote_tmp="$(mktemp)"
+      rclone_run mkdir "$remote_dim_path"
+      load_remote_index_for_dim "$remote_dim_path" "$remote_tmp"
+    fi
+
+    log "Item: dim=$dim | kind=$kind | seed001to(local)=$ns"
     log "BaseKey: $base"
     log "Arquivo:  $bn"
-    log "Local:    $abs_file"
-    log "Remote:   $remote_dim/$bn"
 
-    rclone_run mkdir "$remote_dim"
+    # CHECK: se local < max no drive, só passa
+    local remote_max
+    remote_max="$(remote_max_ns_for_key "$remote_tmp" "$base" "$kind")"
 
-    # upload do maior Ns (sobrescreve se existir)
-    rclone_run copyto "$abs_file" "$remote_dim/$bn" \
+    if (( ns <= remote_max )); then
+      log "SKIP: local seed001to=$ns < drive_max=$remote_max para (dim=$dim, kind=$kind, base=$base)"
+      echo ""
+      continue
+    fi
+
+    # Upload (sobrescreve se existir)
+    log "UPLOAD: local seed001to=$ns >= drive_max=$remote_max  -> $remote_dim_path/$bn"
+    rclone_run copyto "$abs_file" "$remote_dim_path/$bn" \
       --transfers "$TRANSFERS" \
       --checkers "$CHECKERS" \
       --drive-chunk-size "$CHUNK" \
@@ -204,14 +256,15 @@ main() {
       --stats-one-line \
       -P
 
-    # remove Ns menores do mesmo prefixo dentro dessa Dim
-    cleanup_remote_smaller_ns "$remote_dim" "$bn" "$base" "$ns"
+    # Cleanup no drive: remove menores que ns
+    cleanup_remote_smaller_ns_cached "$remote_dim_path" "$remote_tmp" "$base" "$kind" "$ns"
 
     echo ""
   done < "$plan"
 
+  [[ -n "${remote_tmp:-}" ]] && rm -f "$remote_tmp" || true
   rm -f "$plan"
-  log "Concluído: $done/$total"
+  log "Concluído."
 }
 
 main "$@"
