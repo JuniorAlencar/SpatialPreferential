@@ -95,6 +95,26 @@ if [[ "${{1:-}}" == "--max-freq" ]]; then
     fi
 fi
 
+if [[ -t 0 ]]; then
+    threads_given=false
+    for argument in "$@"; do
+        if [[ "$argument" == "--max-threads" || "$argument" == "--max-jobs" ]]; then
+            threads_given=true
+            break
+        fi
+    done
+    if [[ "$threads_given" == false ]]; then
+        read -r -p "Máximo de threads/jobs simultâneos (vazio = automático): " requested_threads
+        if [[ -n "$requested_threads" ]]; then
+            if [[ ! "$requested_threads" =~ ^[1-9][0-9]*$ ]]; then
+                echo "Número máximo de threads inválido: $requested_threads" >&2
+                exit 2
+            fi
+            set -- --max-threads "$requested_threads" "$@"
+        fi
+    fi
+fi
+
 python3 "$script_dir/python/run_benchmarked_jobs.py" \\
     --binary "$script_dir/../build/exe1" \\
     --params-dir "$script_dir/../parms_pc_{N}" \\

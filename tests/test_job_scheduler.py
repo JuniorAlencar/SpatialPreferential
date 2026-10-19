@@ -145,11 +145,12 @@ class SchedulerTests(unittest.TestCase):
             subprocess.run(["bash", "-n", str(launcher)], check=True)
             events = root / "events.jsonl"
             env = dict(os.environ, SPATIAL_TEST_EVENTS=str(events))
-            result = subprocess.run(["bash", str(launcher), "--max-jobs", "2"],
+            result = subprocess.run(["bash", str(launcher), "--max-threads", "1"],
                                     env=env, capture_output=True, text=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             report = json.loads((scripts / "benchmark_N_20.json").read_text())
             self.assertEqual(report["completed_jobs"], 1)
+            self.assertEqual(report["initial_max_simultaneous_jobs"], 1)
             self.assertEqual(len(list(scripts.rglob("gml_*.gml.gz"))), 1)
 
 

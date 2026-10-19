@@ -340,10 +340,11 @@ def main() -> int:
     parser.add_argument("--working-dir", type=Path, required=True)
     parser.add_argument("--samples", type=int, required=True,
                         help="Desired number of existing + new samples per JSON")
-    parser.add_argument("--max-jobs", type=int, help="Optional manual upper bound")
+    parser.add_argument("--max-jobs", "--max-threads", dest="max_jobs", type=int,
+                        help="Maximum simultaneous jobs (threads in the launcher)")
     args = parser.parse_args()
     if args.samples < 1 or (args.max_jobs is not None and args.max_jobs < 1):
-        parser.error("--samples and --max-jobs must be positive")
+        parser.error("--samples and --max-threads/--max-jobs must be positive")
     try:
         return run(args)
     except (OSError, ValueError, RuntimeError) as exc:

@@ -17,6 +17,6 @@
   "initial_max_simultaneous_jobs": 16,
   "current_max_simultaneous_jobs": 16,
   "planned_jobs": 225,
-  "completed_jobs": 21,
+  "completed_jobs": 33,
   "status": "running"
 }

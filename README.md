@@ -101,6 +101,12 @@ python3 scripts/python/multithread_pc.py
 bash scripts/N_100000_multithread_pc.sh
 ```
 
+No terminal, o shell pergunta o número máximo de threads/jobs simultâneos;
+deixe vazio para usar o limite automático. Também é possível informá-lo sem
+interação: `bash scripts/N_100000_multithread_pc.sh --max-threads 4`.
+Cada job executa uma amostra; o executor ainda pode usar menos jobs se a RAM
+disponível ou o limite de CPUs exigir.
+
 O primeiro job real mede o pico de RAM com `/usr/bin/time` e conta como uma das
 amostras solicitadas. O executor calcula o limite de jobs simultâneos com a RAM
 total da máquina, os CPUs disponíveis, uma reserva de 15% para o sistema e 30%
