@@ -1,7 +1,7 @@
 # Folders
 /presentation/*
 /new_data
-/scripts/N_*
+/scripts/N_100000/*
 /parms_pc
 /scripts/multithread
 /build
