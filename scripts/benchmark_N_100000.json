@@ -8,7 +8,7 @@
     "compute_properties/Short_BFS": 253.632995279,
     "save_data/properties": 7.3655e-05
   },
-  "largest_peak_rss_bytes": 41328640,
+  "largest_peak_rss_bytes": 41451520,
   "effective_ram_limit_bytes": 16626536448,
   "available_ram_after_benchmark_bytes": 9532354560,
   "reserved_ram_bytes": 2493980467,
@@ -17,6 +17,6 @@
   "initial_max_simultaneous_jobs": 16,
   "current_max_simultaneous_jobs": 16,
   "planned_jobs": 225,
-  "completed_jobs": 20,
+  "completed_jobs": 21,
   "status": "running"
 }
