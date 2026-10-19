@@ -9,7 +9,10 @@
 #include <random>
 
 #include <chrono>
+#include <cstdlib>
 #include <iomanip>  // for setprecision
+#include <sstream>
+#include <unistd.h>
 
 // comentarion
 using json = nlohmann::json;
@@ -22,6 +25,83 @@ enum RunMode : int {
     PROPS_ONLY = 1,
     NETWORK_ONLY = 2,
     BOTH = 3
+};
+
+class ProgressReporter {
+    using Clock = std::chrono::steady_clock;
+    json benchmark = json::object();
+    std::string current_stage;
+    Clock::time_point started;
+    std::string metrics_path;
+    int seed;
+
+    static std::string duration(double seconds) {
+        std::ostringstream out;
+        if (seconds >= 3600.0) {
+            out << static_cast<long long>(seconds / 3600) << "h "
+                << static_cast<int>(seconds / 60) % 60 << "min";
+        } else if (seconds >= 60.0) {
+            out << static_cast<int>(seconds / 60) << "min "
+                << static_cast<int>(seconds) % 60 << "s";
+        } else {
+            out << std::fixed << std::setprecision(1) << seconds << "s";
+        }
+        return out.str();
+    }
+
+    double elapsed() const {
+        return std::chrono::duration<double>(Clock::now() - started).count();
+    }
+
+    double reference() const {
+        auto it = benchmark.find(current_stage);
+        return it != benchmark.end() && it->is_number() ? it->get<double>() : 0.0;
+    }
+
+    void print(const std::string& message) const {
+        std::cerr << "[seed=" << seed << " pid=" << getpid() << "] "
+                  << current_stage << ": " << message << '\n';
+    }
+
+public:
+    explicit ProgressReporter(int current_seed) : seed(current_seed) {
+        if (const char* value = std::getenv("SPATIAL_STAGE_BENCHMARK")) {
+            auto parsed = json::parse(value, nullptr, false);
+            if (parsed.is_object()) benchmark = std::move(parsed);
+        }
+        if (const char* value = std::getenv("SPATIAL_STAGE_METRICS_FILE"))
+            metrics_path = value;
+    }
+
+    void begin(const std::string& stage) {
+        current_stage = stage;
+        started = Clock::now();
+        if (reference() > 0.0)
+            print("iniciado | tempo estimado pelo benchmark " + duration(reference()));
+        else
+            print("iniciado | medindo tempo desta etapa");
+    }
+
+    void update(std::size_t completed, std::size_t total) const {
+        if (total == 0) return;
+        const double fraction = static_cast<double>(completed) / total;
+        const double live_total = elapsed() / fraction;
+        const double benchmark_total = reference();
+        const double estimated_total = benchmark_total > 0.0
+            ? std::max(benchmark_total, live_total) : live_total;
+        print(std::to_string(completed) + " / " + std::to_string(total)
+              + " | restante ~" + duration(std::max(0.0, estimated_total * (1.0 - fraction)))
+              + (benchmark_total > 0.0 ? " (benchmark + ritmo atual)" : " (ritmo atual)"));
+    }
+
+    void end() const {
+        const double seconds = elapsed();
+        print("concluído em " + duration(seconds));
+        if (!metrics_path.empty()) {
+            std::ofstream out(metrics_path, std::ios::app);
+            out << json{{"stage", current_stage}, {"seconds", seconds}}.dump() << '\n';
+        }
+    }
 };
 
 samargs read_parametes(const string& fname) {
@@ -65,6 +145,10 @@ int main(int argc, char* argv[]) {
 
     // read parameters from json file
     samargs xargs = read_parametes(argv[1]);
+    std::ifstream options_file(argv[1]);
+    const json options = json::parse(options_file);
+    const bool compute_dijkstra = options.value("compute_dijkstra", false);
+    const bool compute_spearman = options.value("compute_spearman", false);
 
     // set filenames
     char n_folder[50], alpha_folder[160], gml_folder[170], prop_folder[170], prop_file[200], gml_file[200], L_coast_file[200] ,time_process_file[200];
@@ -83,63 +167,61 @@ int main(int argc, char* argv[]) {
     fs::create_directories(prop_folder);
 
     SamuraI S(xargs);
-    S.createGraph();
+    ProgressReporter progress(xargs.seed);
+    S.setProgressCallback([&](std::size_t completed, std::size_t total) {
+        progress.update(completed, total);
+    });
+    auto run_stage = [&](const std::string& name, auto&& operation) {
+        progress.begin(name);
+        operation();
+        progress.end();
+    };
+    run_stage("create_network", [&] { S.createGraph(); });
     
     auto run_mode = static_cast<RunMode>(xargs.run_mode);
     
-    switch (run_mode) {
-    case PROPS_ONLY: {
-        R_ass_Newman   r_newman   = S.computeAssortativityCoefficientNewmanDAGJK(/*B=*/100, /*use_excess=*/true);
-        R_ass_Spearman r_spearman = S.computeRankAssortativitySpearmanDAGJK(/*B=*/100, /*use_excess=*/true);
-        double C = S.computeClusterCoefficient();
+    if (run_mode == NETWORK_ONLY || run_mode == BOTH)
+        run_stage("save_data/GML", [&] { S.writeGML(gml_file); });
 
-        Navigation_COST AStar = S.computeGlobalNavigationDijkstraExact();
-        Navigation_BFS  bfs   = S.computeGlobalNavigation_BFS();
-
-        std::cout << prop_file << std::endl;
-        std::ofstream pout(prop_file);
-        pout << "#MeanShortestPathDijstrika, " << "#MeanShortestPathBFS, "
-            << "#Ass_Spearman, " << "#Ass_Spearman_error, "
-            << "#Ass_Newman, "  << "#Ass_Newman_error, "
-            << "#ClusterCoefficient\n";
-        pout << AStar.shortestpath << "," << bfs.shortestpath << ","
-            << r_spearman.R << "," << r_spearman.error  << ","
-            << r_newman.R   << "," << r_newman.error    << ","
-            << C << "\n";
-        break;
-    }
-    case NETWORK_ONLY: {
-        S.writeGML(gml_file);
-        break;
-    }
-    case BOTH: {
-    // 1) salva rede
-    S.writeGML(gml_file);
-
-    // 2) calcula e salva propriedades (reuso do bloco acima)
-    R_ass_Newman   r_newman   = S.computeAssortativityCoefficientNewmanDAGJK(/*B=*/100, /*use_excess=*/true);
-    R_ass_Spearman r_spearman = S.computeRankAssortativitySpearmanDAGJK(/*B=*/100, /*use_excess=*/true);
-    double C = S.computeClusterCoefficient();
-
-    Navigation_COST AStar = S.computeGlobalNavigationDijkstraExact();
-    Navigation_BFS  bfs   = S.computeGlobalNavigation_BFS();
-
-    std::cout << prop_file << std::endl;
-    std::ofstream pout(prop_file);
-    pout << "#MeanShortestPathDijstrika, " << "#MeanShortestPathBFS, "
-         << "#Ass_Spearman, " << "#Ass_Spearman_error, "
-         << "#Ass_Newman, "  << "#Ass_Newman_error, "
-         << "#ClusterCoefficient\n";
-    pout << AStar.shortestpath << "," << bfs.shortestpath << ","
-         << r_spearman.R << "," << r_spearman.error  << ","
-         << r_newman.R   << "," << r_newman.error    << ","
-         << C << "\n";
-    break;
-    }
-    default:
+    if (run_mode == PROPS_ONLY || run_mode == BOTH) {
+        R_ass_Newman r_newman{};
+        R_ass_Spearman r_spearman{};
+        double C = 0.0;
+        Navigation_COST shortest_cost;
+        Navigation_BFS shortest_bfs;
+        run_stage("compute_properties/Newman", [&] {
+            r_newman = S.computeAssortativityCoefficientNewmanDAGJK(100, true);
+        });
+        if (compute_spearman)
+            run_stage("compute_properties/Spearman", [&] {
+                r_spearman = S.computeRankAssortativitySpearmanDAGJK(100, true);
+            });
+        run_stage("compute_properties/Clustering", [&] {
+            C = S.computeClusterCoefficient();
+        });
+        if (compute_dijkstra)
+            run_stage("compute_properties/Shortest_Dijkstra", [&] {
+                shortest_cost = S.computeGlobalNavigationDijkstraExact();
+            });
+        run_stage("compute_properties/Short_BFS", [&] {
+            shortest_bfs = S.computeGlobalNavigation_BFS();
+        });
+        run_stage("save_data/properties", [&] {
+            std::cout << prop_file << std::endl;
+            std::ofstream pout(prop_file);
+            pout << "#MeanShortestPathDijstrika, " << "#MeanShortestPathBFS, "
+                << "#Ass_Spearman, " << "#Ass_Spearman_error, "
+                << "#Ass_Newman, " << "#Ass_Newman_error, "
+                << "#ClusterCoefficient\n";
+            if (compute_dijkstra) pout << shortest_cost.shortestpath;
+            pout << "," << shortest_bfs.shortestpath << ",";
+            if (compute_spearman) pout << r_spearman.R << "," << r_spearman.error;
+            else pout << ",";
+            pout << "," << r_newman.R << "," << r_newman.error << "," << C << "\n";
+        });
+    } else if (run_mode != NETWORK_ONLY) {
         std::cerr << "[warn] run_mode inválido (" << xargs.run_mode
-                << "). Use 1 (props), 2 (network), 3 (both).\n";
-        break;
+                  << "). Use 1 (props), 2 (network), 3 (both).\n";
     }
 
     S.clear();

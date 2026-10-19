@@ -10,19 +10,21 @@ import os
 #------------------------------------------------------------------------------------------
 
 N = [10**5]
-alpha_a = [0.0, 1.0, 2.0, 3.0, 4.0]
-alpha_g = [1.0, 2.0, 3.0, 4.0]
-#alpha_ag_f = 2.0
-NumSamples = [40]
+dim = 2
+alpha_a = [i*dim for i in range(9)]
+alpha_g = [1.0, 2.0, 3.0, 4.0, 5.0]
+NumSamples = [30]
 m0 = 2
-dim = [2,3,4]
-run_mode = 2
-
+dim = [2]
+run_mode = 1
+compute_dijkstra = False
+compute_spearman = False
 
 for d in dim:
     for ag in alpha_g:
         for aa in alpha_a:
-            FunctionsFile.JsonGenerate(N[0], aa, ag, d, m0, run_mode)
+            FunctionsFile.JsonGenerate(N[0], aa, ag, d, m0, run_mode,
+                                       compute_dijkstra, compute_spearman)
             FunctionsFile.ScriptGenerate(N[0], aa, ag, d, NumSamples[0], m0)
 
 FunctionsFile.text_terminal()

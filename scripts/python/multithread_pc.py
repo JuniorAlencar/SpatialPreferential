@@ -1,40 +1,18 @@
 import src.MultithreadPC_Functions as FunctionsFile
-import numpy as np
-import glob
-import os
-import pandas as pd
-
-#multithread_pc(N,num_samples)
-#N: number of nodes;
-# return .sh file to run parallel in PC in scripts folder
-#--------------------------------------------------------
-#JsonGenerate(N, alpha_a,alpha_g,dim)
-#multithread_pc(N,NumSamples)
-#alpha_a: parameter to control preferential attrachment
-#alpha_g: parameter to control random power law
-#dim: dimension
-#N: Number of nodes;
-#return: set of .json file with above parameters 
-
-
-N = [25000, 50000, 75000, 100000, 125000, 150000, 175000, 200000]
-alpha_a = 2.0
-alpha_g = 2.0
+N = 10**5
+dim = 2
+alpha_a = [i * dim for i in range(9)]
+alpha_g = [1.0, 3.0, 4.0, 5.0, 6.0]
 m0 = 2
-dim = 4
-#alpha_ag_f = 2.0
-NumSamples = [50, 30, 20, 10, 10, 5, 5, 5]
+NumSamples = 5
+run_mode = 1
+compute_dijkstra = False
+compute_spearman = False
 
-run_mode = 2
+for aA in alpha_a:
+    for aG in alpha_g:
+        FunctionsFile.JsonGenerate(N, aA, aG, dim, m0, run_mode,
+                                   compute_dijkstra, compute_spearman)
 
-#for n in N:
-
-for idx, n in enumerate(N):
-    FunctionsFile.JsonGenerate(n, alpha_a, alpha_g, dim, m0, run_mode)
-
-    FunctionsFile.multithread_pc(n, NumSamples[idx])
-    FunctionsFile.permission_run(n)
-
-#for j in range(len(N)):
-#FunctionsFile.multithread_pc(N, N_s)
-#FunctionsFile.permission_run(N)
+launcher = FunctionsFile.multithread_pc(N, NumSamples)
+print(f"JSONs gerados em parms_pc_{N}; executor: {launcher}")

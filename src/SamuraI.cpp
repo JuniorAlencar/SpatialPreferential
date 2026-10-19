@@ -3,6 +3,7 @@
 #include "randUtils.hpp"
 
 #include <boost/graph/graph_concepts.hpp>
+#include <boost/graph/compressed_sparse_row_graph.hpp>
 #include <boost/graph/named_function_params.hpp>
 #include <boost/graph/properties.hpp>
 #include <boost/range/iterator_range_core.hpp>
@@ -14,16 +15,29 @@
 
 inline bool cmp(vertex_prop_double p1, vertex_prop_double p2) { return p1.second < p2.second; }
 
-void SamuraI::CreateNetwork(){
-    // (re)inicia o map de pesos com functors que conhecem G
-    edge_weight_store = decltype(edge_weight_store)(0, EdgeHash{&G}, EdgeEq{&G});
-    edge_weight_store.reserve(static_cast<std::size_t>(1.5 * m_num_vertices * m_m0));
+void SamuraI::reportProgress(std::size_t completed, std::size_t total) const {
+    if (!progress_callback || total == 0) return;
+    const std::size_t interval = std::max<std::size_t>(1, total / 10);
+    if (completed == total || completed % interval == 0)
+        progress_callback(completed, total);
+}
 
+void SamuraI::CreateNetwork(){
     hrand rnd(m_seed);
     const int m0 = m_m0;
     if (m0 < 1) throw std::runtime_error("m_m0 deve ser >= 1");
     if (m_num_vertices < m0 + 1)
         throw std::runtime_error("Para grau minimo m0, exija m_num_vertices >= m0 + 1");
+
+    clear();
+    center_of_mass.setZero();
+    sum_positions.setZero();
+    pos.reserve(static_cast<std::size_t>(m_num_vertices));
+    // Only selected vertices change degree during the m0 draws, and they
+    // are excluded thereafter. All remaining attachment weights stay fixed.
+    std::vector<double> weights(static_cast<std::size_t>(m_num_vertices));
+    std::vector<unsigned char> chosen(static_cast<std::size_t>(m_num_vertices), 0);
+    const double exponent = -0.5 * m_alpha_a;
 
     auto add_pos = [&](int i){
         double radius = rnd.inv_power_law_distributed(m_r_min, m_r_max, m_alpha_g); // ~ r^{-alpha_G}
@@ -44,9 +58,10 @@ void SamuraI::CreateNetwork(){
     // clique completo com peso
     for (int u = 0; u < m_init; ++u){
         for (int v = u + 1; v < m_init; ++v){
-            if (!boost::edge(u, v, G).second) add_weighted_edge(u, v);
+            add_weighted_edge(u, v);
         }
     }
+    reportProgress(m_init, m_num_vertices);
 
     // 2) Crescimento
     for (int i = m_init; i < m_num_vertices; ++i){
@@ -54,68 +69,59 @@ void SamuraI::CreateNetwork(){
         add_pos(i);
         vertex_t New = i;
 
-        const int links_to_add = m0;
-        std::unordered_set<vertex_t> chosen;
-        chosen.reserve(links_to_add);
-
-        for (int ell = 0; ell < links_to_add; ++ell){
-            std::vector<vertex_prop_double> prob; // pair<vertex, weight>
-            prob.reserve(static_cast<size_t>(i));
-            const double exponent = -0.5 * m_alpha_a; // (r^2)^{-alpha_a/2}
-            double p_total = 0.0;
-
-            for (int u = 0; u < i; ++u){
-                vertex_t v = u;
-                if (chosen.count(v)) continue;
-
-                int k_v = static_cast<int>(boost::degree(v, G));
-                Vector4d Ruv = pos[v] - pos[New];
+        std::fill(chosen.begin(), chosen.begin() + i, 0);
+        double initial_total = 0.0;
+        for (int u = 0; u < i; ++u) {
+            const double degree = static_cast<double>(boost::degree(u, G));
+            if (m_alpha_a == 0.0) {
+                // pow(r_squared, 0) is exactly 1: geometry has no effect.
+                weights[u] = degree;
+            } else {
+                const Vector4d Ruv = pos[u] - pos[New];
                 double Ruv_SQ = Ruv.transpose() * Ruv;
                 if (Ruv_SQ <= 0.0) Ruv_SQ = std::numeric_limits<double>::min();
+                weights[u] = degree * std::pow(Ruv_SQ, exponent);
+            }
+            initial_total += weights[u];
+        }
 
-                double w = static_cast<double>(k_v) * std::pow(Ruv_SQ, exponent);
-                p_total += w;
-                prob.emplace_back(v, w);
+        for (int ell = 0; ell < m0; ++ell) {
+            // Sum in the original vertex order: subtracting selected weights
+            // from a running total would change floating-point rounding.
+            double p_total = initial_total;
+            if (ell != 0) {
+                p_total = 0.0;
+                for (int u = 0; u < i; ++u) {
+                    if (!chosen[u]) p_total += weights[u];
+                }
             }
 
-            // fallback: aleatório válido
-            if (p_total <= 0.0 || prob.empty()){
+            if (p_total <= 0.0) {
                 int trials = 0;
-                while (trials++ < 1000){
-                    int v = rnd.uniform_int(0, i - 1);
-                    if (!chosen.count(v) && !boost::edge(v, New, G).second){
+                while (trials++ < 1000) {
+                    const int v = rnd.uniform_int(0, i - 1);
+                    if (!chosen[v]) {
                         add_weighted_edge(v, New);
-                        chosen.insert(v);
+                        chosen[v] = 1;
                         break;
                     }
                 }
                 continue;
             }
 
-            // amostragem por cumsum
-            double r = rnd.uniform_real(0.0, 1.0);
+            const double r = rnd.uniform_real(0.0, 1.0);
             double cumsum = 0.0;
-            for (auto &pr : prob){
-                pr.second /= p_total;
-                cumsum += pr.second;
-                if (cumsum > r){
-                    vertex_t vstar = pr.first;
-                    if (!boost::edge(vstar, New, G).second){
-                        add_weighted_edge(vstar, New);
-                        chosen.insert(vstar);
-                    } else {
-                        for (auto &alt : prob){
-                            if (!chosen.count(alt.first) && !boost::edge(alt.first, New, G).second){
-                                add_weighted_edge(alt.first, New);
-                                chosen.insert(alt.first);
-                                break;
-                            }
-                        }
-                    }
+            for (int u = 0; u < i; ++u) {
+                if (chosen[u]) continue;
+                cumsum += weights[u] / p_total;
+                if (cumsum > r) {
+                    add_weighted_edge(u, New);
+                    chosen[u] = 1;
                     break;
                 }
             }
         }
+        reportProgress(i + 1, m_num_vertices);
     }
 
     // verificação final (opcional)
@@ -129,37 +135,98 @@ void SamuraI::CreateNetwork(){
 }
 
 
-Navigation_BFS SamuraI::computeGlobalNavigation_BFS(){
-	struct Navigation_BFS BFS;
+bool SamuraI::computeTreeNavigation(Navigation_BFS& bfs, Navigation_COST& cost) const {
+    const std::size_t n = boost::num_vertices(G);
+    if (n == 0 || boost::num_edges(G) != n - 1) return false;
 
-    double meanShortestPath = 0;
-    //int count = 0;
-    std::vector<int> d(m_num_vertices, 0);  // vector for diamater
-    int aux = 0;                           // auxiliary value for the diameter
-    
-    for(auto u : boost::make_iterator_range(vertices(G))){
-        //boost::array<int, 100000> distances{{0}};
-        std::vector<int> distances(m_num_vertices,0);  // vector for diamater
-        breadth_first_search(G, u, visitor(make_bfs_visitor(record_distances(&distances[0], on_tree_edge()))));
-        // breadth_first_search(G, u, visitor(
-        //      make_bfs_visitor( record_distances(distances.begin(), 
-        //      on_tree_edge{}))));
-    
-        for (auto e=distances.begin(); e != distances.end(); ++e){
-             meanShortestPath += *e;
-             //++ count;
-             if(*e > d[aux])
-                d[aux] = *e;
-      }
+    const auto weights = get(boost::edge_weight, G);
+    std::vector<vertex_t> parent(n, n), order;
+    std::vector<double> parent_weight(n, 0.0);
+    order.reserve(n);
+    order.push_back(0);
+    parent[0] = 0;
+    for (std::size_t i = 0; i < order.size(); ++i) {
+        const vertex_t u = order[i];
+        for (auto e : boost::make_iterator_range(boost::out_edges(u, G))) {
+            const vertex_t v = boost::target(e, G);
+            if (!std::isfinite(weights[e])) return false;
+            if (parent[v] != n) continue;
+            parent[v] = u;
+            parent_weight[v] = weights[e];
+            order.push_back(v);
+        }
     }
-    int dia = *max_element(d.begin(), d.end());
-    double count = num_vertices(G)*(num_vertices(G)-1);
-    meanShortestPath /= count;
-    
-    BFS.shortestpath = meanShortestPath;
-    BFS.diamater = dia;
-    
-    return BFS;
+    if (order.size() != n) return false;
+
+    std::vector<std::size_t> subtree(n, 1);
+    std::vector<int> height(n, 0);
+    std::vector<double> weighted_height(n, 0.0);
+    long double hop_sum = 0.0L, weight_sum = 0.0L;
+    for (std::size_t i = n; i-- > 1;) {
+        const vertex_t v = order[i], u = parent[v];
+        // Removing this edge partitions the tree into s and n-s vertices.
+        // Exactly s*(n-s) unordered paths cross the edge.
+        const long double pairs = static_cast<long double>(subtree[v]) * (n - subtree[v]);
+        hop_sum += pairs;
+        weight_sum += pairs * parent_weight[v];
+        subtree[u] += subtree[v];
+        const int branch = height[v] + 1;
+        bfs.diamater = std::max(bfs.diamater, height[u] + branch);
+        height[u] = std::max(height[u], branch);
+        const double weighted_branch = weighted_height[v] + parent_weight[v];
+        cost.diamater = std::max(cost.diamater, weighted_height[u] + weighted_branch);
+        weighted_height[u] = std::max(weighted_height[u], weighted_branch);
+    }
+    const long double pairs = static_cast<long double>(n) * (n - 1) / 2;
+    bfs.shortestpath = pairs ? static_cast<double>(hop_sum / pairs) : 0.0;
+    cost.shortestpath = pairs ? static_cast<double>(weight_sum / pairs) : 0.0;
+    return true;
+}
+
+Navigation_BFS SamuraI::computeGlobalNavigation_BFS() {
+    Navigation_BFS result;
+    Navigation_COST cost;
+    if (computeTreeNavigation(result, cost)) return result;
+    const std::size_t n = boost::num_vertices(G);
+    if (n <= 1) return result;
+
+    // Flatten adjacency once for all sources. Reuse the queue and distance
+    // buffers instead of allocating visitor/color/queue storage for every BFS.
+    std::vector<std::size_t> offsets(n + 1, 0);
+    std::vector<vertex_t> neighbors;
+    neighbors.reserve(2 * boost::num_edges(G));
+    for (vertex_t u = 0; u < n; ++u) {
+        for (auto v : boost::make_iterator_range(boost::adjacent_vertices(u, G)))
+            neighbors.push_back(v);
+        offsets[u + 1] = neighbors.size();
+    }
+    std::vector<int> distance(n);
+    std::vector<vertex_t> queue(n);
+    double sum = 0.0;
+    for (vertex_t source = 0; source < n; ++source) {
+        std::fill(distance.begin(), distance.end(), -1);
+        distance[source] = 0;
+        queue[0] = source;
+        std::size_t tail = 1;
+        for (std::size_t head = 0; head < tail; ++head) {
+            const vertex_t u = queue[head];
+            for (std::size_t j = offsets[u]; j < offsets[u + 1]; ++j) {
+                const vertex_t v = neighbors[j];
+                if (distance[v] != -1) continue;
+                distance[v] = distance[u] + 1;
+                queue[tail++] = v;
+            }
+        }
+        for (int d : distance) {
+            // Match the original zero contribution from unreachable vertices.
+            if (d < 0) continue;
+            sum += d;
+            result.diamater = std::max(result.diamater, d);
+        }
+        reportProgress(source + 1, n);
+    }
+    result.shortestpath = sum / (static_cast<double>(n) * (n - 1));
+    return result;
 }
 
 
@@ -169,7 +236,7 @@ void SamuraI::add_weighted_edge(int u, int v) {
     const Vector4d d  = pos[u] - pos[v];
     const double w2   = (d.transpose() * d);
     const double w    = std::sqrt(std::max(0.0, w2)); // distância física
-    edge_weight_store[e] = w; // guarda no map externo
+    put(boost::edge_weight, G, e, w);
 }
 
 
@@ -194,19 +261,26 @@ Navigation_COST SamuraI::computeGlobalNavigationDijkstraExact(void) {
         return out;
     }
 
-    // Índice de vértice para property maps
-    auto vindex = get(boost::vertex_index, G);
+    Navigation_BFS bfs;
+    if (computeTreeNavigation(bfs, out)) return out;
 
-    // Peso euclidiano on-the-fly: ||pos[u] - pos[v]||
-    auto wmap = boost::make_function_property_map<edge_t, double>(
-        [&](const edge_t& e) -> double {
-            vertex_t u = boost::source(e, G);
-            vertex_t v = boost::target(e, G);
-            const Vector4d d = pos[u] - pos[v];
-            const double w2  = (d.transpose() * d);
-            return std::sqrt(std::max(0.0, w2));
+    // A contiguous, immutable adjacency layout avoids following allocations
+    // in the growing graph for every relaxation of every source. Represent
+    // each undirected edge by two arcs, preserving the outgoing edge order.
+    using CompactGraph = boost::compressed_sparse_row_graph<
+        boost::directedS, boost::no_property,
+        boost::property<boost::edge_weight_t, double>>;
+    CompactGraph compact(G, get(boost::vertex_index, G), N, 2 * boost::num_edges(G));
+    auto wmap = get(boost::edge_weight, compact);
+    const auto original_weights = get(boost::edge_weight, G);
+    for (vertex_t u = 0; u < N; ++u) {
+        auto compact_edge = boost::out_edges(u, compact).first;
+        for (auto e : make_iterator_range(boost::out_edges(u, G))) {
+            wmap[*compact_edge++] = original_weights[e];
         }
-    );
+    }
+    auto vindex = get(boost::vertex_index, compact);
+    auto colors = boost::make_two_bit_color_map(N, vindex);
 
     // Buffer de distância
     std::vector<double> dist(N, std::numeric_limits<double>::infinity());
@@ -219,12 +293,11 @@ Navigation_COST SamuraI::computeGlobalNavigationDijkstraExact(void) {
 
     // Loop por TODAS as fontes (exato)
     for (vertex_t s : make_iterator_range(boost::vertices(G))) {
-        std::fill(dist.begin(), dist.end(), std::numeric_limits<double>::infinity());
-
         boost::dijkstra_shortest_paths(
-            G, s,
+            compact, s,
             boost::weight_map(wmap)
                  .distance_map(dist_map)
+                 .color_map(colors)
         );
 
         // Acumula resultados desta fonte
@@ -237,6 +310,7 @@ Navigation_COST SamuraI::computeGlobalNavigationDijkstraExact(void) {
                 if (dv > diam) diam = dv;
             }
         }
+        reportProgress(s + 1, N);
     }
 
     // Média exata sobre pares alcançáveis
@@ -254,18 +328,53 @@ Navigation_COST SamuraI::computeGlobalNavigationDijkstraExact(void) {
 
 
 double SamuraI::computeClusterCoefficient() {
-    // Container com coeficientes locais
-    ClusteringContainer c_container(num_vertices(G));
+    const std::size_t n = boost::num_vertices(G);
+    if (n == 0) return std::numeric_limits<double>::quiet_NaN();
 
-    // Criação correta do property_map usando make_iterator_property_map
-    ClusteringMap c_map = make_iterator_property_map(c_container.begin(), get(vertex_index, G));
+    // Orient each edge by (degree, vertex id). Every triangle has exactly one
+    // forward wedge, avoiding pairwise searches in high-degree neighborhoods.
+    std::vector<std::vector<vertex_t>> forward(n);
+    std::vector<std::size_t> degree(n), triangles(n, 0);
+    for (vertex_t v = 0; v < n; ++v) degree[v] = boost::degree(v, G);
+    for (auto e : boost::make_iterator_range(boost::edges(G))) {
+        vertex_t u = boost::source(e, G), v = boost::target(e, G);
+        if (std::make_pair(degree[v], v) < std::make_pair(degree[u], u)) std::swap(u, v);
+        forward[u].push_back(v);
+    }
+    std::vector<vertex_t> marked(n, n);
+    for (vertex_t u = 0; u < n; ++u) {
+        for (vertex_t v : forward[u]) marked[v] = u;
+        for (vertex_t v : forward[u]) {
+            for (vertex_t w : forward[v]) {
+                if (marked[w] != u) continue;
+                ++triangles[u];
+                ++triangles[v];
+                ++triangles[w];
+            }
+        }
+        reportProgress(u + 1, n);
+    }
 
-    // Calcula e retorna o coeficiente global
-    double global_clustering = all_clustering_coefficients(G, c_map);
-
-    return global_clustering;
+    // Boost's original ClusteringContainer used float, including accumulation.
+    // Keep that precision and vertex order so output rounding is unchanged.
+    float sum = 0.0f;
+    for (vertex_t v = 0; v < n; ++v) {
+        const float routes = static_cast<float>(degree[v] * (degree[v] - 1) / 2);
+        const float cc = routes > 0.0f ? static_cast<float>(triangles[v]) / routes : 0.0f;
+        sum += cc;
+    }
+    return sum / static_cast<float>(n);
 }
 
+static std::vector<std::pair<vertex_t, vertex_t>> edge_endpoints(const graph_t& graph) {
+    std::vector<std::pair<vertex_t, vertex_t>> endpoints;
+    endpoints.reserve(boost::num_edges(graph));
+    for (auto e : boost::make_iterator_range(boost::edges(graph))) {
+        const vertex_t u = boost::source(e, graph), v = boost::target(e, graph);
+        if (u != v) endpoints.emplace_back(u, v);
+    }
+    return endpoints;
+}
 
 // hashzinho estável para distribuir vértices em B buckets
 static inline std::size_t mix_hash(std::size_t x) {
@@ -285,7 +394,7 @@ static inline std::size_t mix_hash(std::size_t x) {
 R_ass_Newman SamuraI::computeAssortativityCoefficientNewmanDAGJK(int B, bool use_excess /*=false*/) {
     using boost::make_iterator_range;
 
-    R_ass_Newman out;
+    R_ass_Newman out{};
 
     const std::size_t Mz = boost::num_edges(G);
     const std::size_t Nz = boost::num_vertices(G);
@@ -293,14 +402,13 @@ R_ass_Newman SamuraI::computeAssortativityCoefficientNewmanDAGJK(int B, bool use
     if (B < 2) B = 2;
 
     auto vidx = get(boost::vertex_index, G);
+    const auto endpoints = edge_endpoints(G);
 
     // ======================= r no grafo completo =======================
     double S1 = 0.0, S2 = 0.0, S3 = 0.0; // somatórios (não normalizados)
     std::size_t M_use = 0;
 
-    for (auto e : make_iterator_range(boost::edges(G))) {
-        auto u = boost::source(e, G);
-        auto v = boost::target(e, G);
+    for (const auto& [u, v] : endpoints) {
         if (u == v) continue; // ignora self-loops
 
         int du = (int)boost::degree(u, G);
@@ -347,37 +455,17 @@ R_ass_Newman SamuraI::computeAssortativityCoefficientNewmanDAGJK(int B, bool use
     double r_bar = 0.0;
     int B_eff = 0;
 
+    std::vector<int> deg_tmp(Nz, 0);
+
     // Para cada bloco b: remove todas as arestas incidentes a vértices do bloco
     for (int b = 0; b < B; ++b) {
         double s1 = 0.0, s2 = 0.0, s3 = 0.0;
         std::size_t m_sub = 0;
 
-        for (auto e : make_iterator_range(boost::edges(G))) {
-            auto u = boost::source(e, G);
-            auto v = boost::target(e, G);
-            if (u == v) continue; // ignora self-loop
-
-            std::size_t iu = (std::size_t)vidx[u];
-            std::size_t iv = (std::size_t)vidx[v];
-            if (bucket_of_vertex[iu] == b || bucket_of_vertex[iv] == b) {
-                continue; // remove aresta que toca o bloco b
-            }
-
-            // graus devem ser reavaliados NO SUBGRAFO restante.
-            // Para manter custo linear, aproximamos usando os graus do grafo original
-            // menos as incidências ao bloco b. Para exatidão (ainda O(M)), contamos de novo:
-            // 1) Primeiro passei direto aos somatórios usando contagem local:
-
-            // Truque: computar "on the fly" os graus efetivos no subgrafo é caro sem cache.
-            // Portanto, fazemos DUAS passadas: (1) contar graus no subgrafo, (2) somatórios.
-        }
-
         // ---------- Passo 1: contar graus no subgrafo ----------
         // (recontagem linear O(M)): deg_tmp[id] = grau do vértice id sem arestas do bloco b
-        std::vector<int> deg_tmp(Nz, 0);
-        for (auto e : make_iterator_range(boost::edges(G))) {
-            auto u = boost::source(e, G);
-            auto v = boost::target(e, G);
+        std::fill(deg_tmp.begin(), deg_tmp.end(), 0);
+        for (const auto& [u, v] : endpoints) {
             if (u == v) continue;
 
             std::size_t iu = (std::size_t)vidx[u];
@@ -389,9 +477,7 @@ R_ass_Newman SamuraI::computeAssortativityCoefficientNewmanDAGJK(int B, bool use
         }
 
         // ---------- Passo 2: somatórios T1,T2,T3 no subgrafo ----------
-        for (auto e : make_iterator_range(boost::edges(G))) {
-            auto u = boost::source(e, G);
-            auto v = boost::target(e, G);
+        for (const auto& [u, v] : endpoints) {
             if (u == v) continue;
 
             std::size_t iu = (std::size_t)vidx[u];
@@ -411,17 +497,24 @@ R_ass_Newman SamuraI::computeAssortativityCoefficientNewmanDAGJK(int B, bool use
             ++m_sub;
         }
 
-        if (m_sub == 0) continue;
+        if (m_sub == 0) {
+            reportProgress(b + 1, B);
+            continue;
+        }
 
         const double m  = (double)m_sub;
         const double t1 = s1 / m, t2 = s2 / m, t3 = s3 / m;
         const double den = t3 - t2 * t2;
-        if (std::abs(den) < 1e-12) continue;
+        if (std::abs(den) < 1e-12) {
+            reportProgress(b + 1, B);
+            continue;
+        }
 
         const double r_b = (t1 - t2 * t2) / den;
         r_blocks.push_back(r_b);
         r_bar += r_b;
         ++B_eff;
+        reportProgress(b + 1, B);
     }
 
     if (B_eff >= 2) {
@@ -442,24 +535,25 @@ R_ass_Newman SamuraI::computeAssortativityCoefficientNewmanDAGJK(int B, bool use
 }
 
 // ---- helpers (iguais/compatíveis com os seus) ----
+// Inputs are nonnegative integer degrees, so a histogram gives the same
+// average ranks for ties without sorting O(M log M) values per jackknife block.
 static std::vector<double> compute_ranks_average_ties(const std::vector<double>& vals) {
-    int n = (int)vals.size();
-    std::vector<int> idx(n);
-    std::iota(idx.begin(), idx.end(), 0);
-    std::sort(idx.begin(), idx.end(), [&](int a, int b){
-        return vals[a] < vals[b];
-    });
-    std::vector<double> ranks(n);
-    int i = 0;
-    while (i < n) {
-        int j = i + 1;
-        while (j < n && vals[idx[j]] == vals[idx[i]]) ++j;
+    if (vals.empty()) return {};
+    const auto max_degree = static_cast<std::size_t>(*std::max_element(vals.begin(), vals.end()));
+    std::vector<std::size_t> counts(max_degree + 1, 0);
+    for (double value : vals) ++counts[static_cast<std::size_t>(value)];
+    std::vector<double> rank_by_degree(counts.size(), 0.0);
+    std::size_t offset = 0;
+    for (std::size_t k = 0; k < counts.size(); ++k) {
+        if (counts[k] == 0) continue;
         double rank_sum = 0.0;
-        for (int t = i; t < j; ++t) rank_sum += (t + 1); // ranks 1..n
-        double avg_rank = rank_sum / double(j - i);
-        for (int t = i; t < j; ++t) ranks[idx[t]] = avg_rank;
-        i = j;
+        for (std::size_t j = 0; j < counts[k]; ++j) rank_sum += offset + j + 1;
+        rank_by_degree[k] = rank_sum / static_cast<double>(counts[k]);
+        offset += counts[k];
     }
+    std::vector<double> ranks;
+    ranks.reserve(vals.size());
+    for (double value : vals) ranks.push_back(rank_by_degree[static_cast<std::size_t>(value)]);
     return ranks;
 }
 
@@ -505,7 +599,7 @@ static double spearman_from_degree_pairs(const std::vector<double>& deg_u_list,
 R_ass_Spearman SamuraI::computeRankAssortativitySpearmanDAGJK(int B, bool use_excess /*=false*/) {
     using boost::make_iterator_range;
 
-    R_ass_Spearman out;
+    R_ass_Spearman out{};
 
     const std::size_t Mz = boost::num_edges(G);
     const std::size_t Nz = boost::num_vertices(G);
@@ -515,14 +609,13 @@ R_ass_Spearman SamuraI::computeRankAssortativitySpearmanDAGJK(int B, bool use_ex
 
     // property map para obter índice [0..N-1] de cada vértice (requer vecS ou vertex_index instalado)
     auto vidx = get(boost::vertex_index, G);
+    const auto endpoints = edge_endpoints(G);
 
     // ---------- rho no grafo completo ----------
     std::vector<double> deg_u_full; deg_u_full.reserve(Mz);
     std::vector<double> deg_v_full; deg_v_full.reserve(Mz);
 
-    for (auto e : make_iterator_range(boost::edges(G))) {
-        auto u = boost::source(e, G);
-        auto v = boost::target(e, G);
+    for (const auto& [u, v] : endpoints) {
         if (u == v) continue; // ignora self-loops
         int ku = static_cast<int>(boost::degree(u, G));
         int kv = static_cast<int>(boost::degree(v, G));
@@ -551,6 +644,8 @@ R_ass_Spearman SamuraI::computeRankAssortativitySpearmanDAGJK(int B, bool use_ex
 
     // Vetor de graus temporários (recontados no subgrafo restante)
     std::vector<int> deg_tmp(Nz, 0);
+    auto& deg_u_list = deg_u_full;
+    auto& deg_v_list = deg_v_full;
 
     for (int b = 0; b < B; ++b) {
         // Zera graus temporários
@@ -558,9 +653,7 @@ R_ass_Spearman SamuraI::computeRankAssortativitySpearmanDAGJK(int B, bool use_ex
 
         // 1) Conta graus no subgrafo removendo todas as arestas que tocam vértices do bloco b
         std::size_t M_sub = 0;
-        for (auto e : make_iterator_range(boost::edges(G))) {
-            auto u = boost::source(e, G);
-            auto v = boost::target(e, G);
+        for (const auto& [u, v] : endpoints) {
             std::size_t iu = (std::size_t)vidx[u];
             std::size_t iv = (std::size_t)vidx[v];
 
@@ -577,16 +670,15 @@ R_ass_Spearman SamuraI::computeRankAssortativitySpearmanDAGJK(int B, bool use_ex
 
         if (M_sub == 0) {
             // bloco muito grande; não há arestas restantes — ignora bloco
+            reportProgress(b + 1, B);
             continue;
         }
 
         // 2) Monta listas de graus nos extremos das arestas restantes e calcula Spearman
-        std::vector<double> deg_u_list; deg_u_list.reserve(M_sub);
-        std::vector<double> deg_v_list; deg_v_list.reserve(M_sub);
+        deg_u_list.clear();
+        deg_v_list.clear();
 
-        for (auto e : make_iterator_range(boost::edges(G))) {
-            auto u = boost::source(e, G);
-            auto v = boost::target(e, G);
+        for (const auto& [u, v] : endpoints) {
             std::size_t iu = (std::size_t)vidx[u];
             std::size_t iv = (std::size_t)vidx[v];
 
@@ -605,12 +697,16 @@ R_ass_Spearman SamuraI::computeRankAssortativitySpearmanDAGJK(int B, bool use_ex
             deg_v_list.push_back((double)kv);
         }
 
-        if (deg_u_list.empty()) continue;
+        if (deg_u_list.empty()) {
+            reportProgress(b + 1, B);
+            continue;
+        }
 
         double rho_b = spearman_from_degree_pairs(deg_u_list, deg_v_list);
         rho_block.push_back(rho_b);
         rho_bar += rho_b;
         ++B_eff;
+        reportProgress(b + 1, B);
     }
 
     if (B_eff >= 2) {

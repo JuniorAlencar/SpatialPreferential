@@ -24,6 +24,7 @@
 #include <boost/property_map/property_map.hpp>
 
 #include <cassert>
+#include <functional>
 #include <iostream>
 #include <vector>
 
@@ -72,7 +73,8 @@ using Graph = boost::adjacency_list<
     boost::property<boost::edge_weight_t, double>
 >;
 
-typedef adjacency_list<vecS, vecS, undirectedS, property<vertex_degree_t, int>>
+typedef adjacency_list<vecS, vecS, undirectedS, property<vertex_degree_t, int>,
+                           property<edge_weight_t, double>>
     graph_t;
 
 typedef graph_traits<graph_t>::edge_descriptor edge_t;
@@ -105,43 +107,19 @@ class SamuraI {
     std::vector<Vector4d> pos;  // vector with positions
     Vector4d center_of_mass;    // vector with center of mass
     Vector4d sum_positions;     // auxiliar vector to center of mass
+    std::function<void(std::size_t, std::size_t)> progress_callback;
+    void reportProgress(std::size_t completed, std::size_t total) const;
     //std::vector<float> r;       // vector with r gen for power law
     
-    struct EdgeHash {
-        const graph_t* g{};
-        std::size_t operator()(const edge_t& e) const noexcept {
-            auto u = boost::source(e, *g);
-            auto v = boost::target(e, *g);
-            auto a = std::min<std::size_t>(u, v);
-            auto b = std::max<std::size_t>(u, v);
-            std::size_t h = 0;
-            boost::hash_combine(h, a);
-            boost::hash_combine(h, b);
-            return h;
-        }
-    };
-    struct EdgeEq {
-        const graph_t* g{};
-        bool operator()(const edge_t& e1, const edge_t& e2) const noexcept {
-            auto u1 = boost::source(e1, *g), v1 = boost::target(e1, *g);
-            auto u2 = boost::source(e2, *g), v2 = boost::target(e2, *g);
-            auto a1 = std::min<std::size_t>(u1, v1), b1 = std::max<std::size_t>(u1, v1);
-            auto a2 = std::min<std::size_t>(u2, v2), b2 = std::max<std::size_t>(u2, v2);
-            return a1 == a2 && b1 == b2;
-        }
-    };
-
-    // <<< Membro da classe (não global, sem inicializar aqui)
-    std::unordered_map<edge_t, double, EdgeHash, EdgeEq> edge_weight_store;
+    // Returns false unless the graph is a connected tree with finite weights.
+    bool computeTreeNavigation(Navigation_BFS& bfs, Navigation_COST& cost) const;
     void CreateNetwork();
 
   
     public:
     SamuraI(const samargs& xargs)
     : m_num_vertices(xargs.num_vertices), m_alpha_a(xargs.alpha_a), m_alpha_g(xargs.alpha_g),
-      m_r_min(xargs.r_min), m_r_max(xargs.r_max), m_dim(xargs.dim), m_seed(xargs.seed), m_m0(xargs.m0),
-      // >>> inicializa o unordered_map com functors que conhecem G
-      edge_weight_store(0, EdgeHash{&G}, EdgeEq{&G})
+      m_r_min(xargs.r_min), m_r_max(xargs.r_max), m_dim(xargs.dim), m_seed(xargs.seed), m_m0(xargs.m0)
     {}
 
     inline void createGraph() {
@@ -149,6 +127,9 @@ class SamuraI {
         center_of_mass.setZero();
         sum_positions.setZero();
         CreateNetwork();
+    }
+    void setProgressCallback(std::function<void(std::size_t, std::size_t)> callback) {
+        progress_callback = std::move(callback);
     }
     void writeDegrees(std::string fname);
     void writeConnections(std::string fname);

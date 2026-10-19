@@ -12,6 +12,37 @@ A BFS (Breadth First Search) algorithm was implemented to calculate the shortest
 
 
 ## Requirements
+### Ambiente Python e Jupyter (Ubuntu)
+
+As dependências foram levantadas a partir de `scripts/jupyter` e
+`scripts/python` (incluindo bibliotecas usadas pelos checkpoints antigos).
+Execute na raiz do projeto, em um terminal que permita informar a senha do sudo:
+
+```bash
+bash scripts/setup_python_env.sh
+source ~/.bashrc
+source .venv/bin/activate
+jupyter lab scripts/jupyter
+```
+
+O script instala as dependências de compilação do Python e do simulador C++,
+instala pyenv em `~/.pyenv`, seleciona a versão estável mais recente da série
+Python 3.12 conhecida pelo pyenv e a registra em `.python-version`.
+Cria `.venv`, instala `requirements.txt`, registra o kernel
+**Python (SpatialPreferential)** e salva as versões em `requirements.lock.txt`.
+Selecione esse kernel no Jupyter ou no VS Code. Execute os notebooks a partir
+de `scripts/jupyter` para resolver os imports locais `src` e caminhos relativos.
+
+Para reproduzir as versões de pacotes após a primeira instalação:
+
+```bash
+.venv/bin/python -m pip install -r requirements.lock.txt
+```
+
+Os notebooks `assortativity.ipynb` e `properties_old.ipynb` importam
+`src.FunctionsProperties`, que não está presente no repositório. Esse módulo
+precisa ser recuperado para executar as células que dependem dele.
+
 - cmake
 
 - g++ compile
@@ -52,6 +83,44 @@ sudo apt install zlib1g-dev
 
 
 ## Running code
+
+As otimizações, os limites de custo e os testes de equivalência estão descritos
+em [docs/performance.md](docs/performance.md).
+
+### Geração paralela de amostras
+
+Em `scripts/python/multithread_pc.py`, `compute_dijkstra` e
+`compute_spearman` controlam os cálculos opcionais (ambos começam em `False`).
+Por padrão, as propriedades calculadas são BFS, Newman e clustering. Para
+ativar um opcional, defina a variável correspondente como `True` e gere os
+JSONs novamente. O binário também aceita essas duas chaves diretamente no
+JSON de entrada; colunas opcionais não calculadas ficam vazias no CSV.
+
+```bash
+python3 scripts/python/multithread_pc.py
+bash scripts/N_100000_multithread_pc.sh
+```
+
+O primeiro job real mede o pico de RAM com `/usr/bin/time` e conta como uma das
+amostras solicitadas. O executor calcula o limite de jobs simultâneos com a RAM
+total da máquina, os CPUs disponíveis, uma reserva de 15% para o sistema e 30%
+de margem sobre o maior pico observado. Ele também verifica a RAM disponível
+antes de cada lançamento, considera limites de cgroup, atualiza a estimativa
+após cada job e inicia o próximo assim que houver vaga. O relatório fica em
+`scripts/benchmark_N_100000.json`.
+
+O terminal mostra a etapa em execução, o progresso da criação da rede a cada
+10% dos sítios e o tempo restante estimado. Na primeira amostra, a estimativa
+usa o ritmo observado durante a execução; nas seguintes, usa os tempos medidos
+no benchmark para cada etapa, incluindo as propriedades e a gravação dos dados.
+
+O executor conta as amostras já presentes por configuração e modo de execução
+e produz somente as que faltam até `NumSamples`. O shell pode receber
+`--max-jobs 4` para impor um teto manual, ou `--max-freq 2.5GHz` para o limite
+de frequência já previsto anteriormente. Com `run_mode=1` e `N=100000`, o
+primeiro benchmark também executa o cálculo exato de propriedades e pode demorar.
+Essa etapa usa Python padrão, Linux e GNU time; GNU Parallel não é necessário.
+
 ```bash
 
 # Navigate to the folder where the clone was made

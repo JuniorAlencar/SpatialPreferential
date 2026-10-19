@@ -1,32 +1,23 @@
-import numpy as np
-import glob
-import os
-import pandas as pd
-import re
+"""Generate parameter files and the launcher for parallel network samples."""
+
 import json
 from pathlib import Path
 
-def JsonGenerate(N: int, alpha_a : float, alpha_g : float, dim : int, m0 : int, run_mode : int):
 
-    """
-        N: number of nodes,\n
-        alpha_a: expoential of distances between nodes\n
-        alpha_g: expoential of power law distances\n
-        dim: dimension of imerse network\n
-        m0: number of connections of each new nodes\n
-        run_mode: Decides what will be calculated\n
-        props = 1 - just network\n
-        props = 2 - just properties\n
-        props = 3 - network and properties\n
-    """
-    
-    if run_mode not in {1, 2, 3}: raise ValueError("run_mode must be 1 (props), 2 (network) or 3 (both).")
-    
-    filename = f"N{N}_a{alpha_a:.2f}_g{alpha_g:.2f}_d{dim}_m0_{m0}.json"
-    outdir = Path(f"../../parms_pc_{N}")
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+SCRIPTS_DIR = PROJECT_ROOT / "scripts"
+
+
+def JsonGenerate(N: int, alpha_a: float, alpha_g: float, dim: int,
+                 m0: int, run_mode: int, compute_dijkstra: bool = False,
+                 compute_spearman: bool = False) -> Path:
+    """Write one input JSON for exe1 and return its path."""
+    if run_mode not in {1, 2, 3}:
+        raise ValueError("run_mode must be 1 (props), 2 (network) or 3 (both).")
+
+    outdir = PROJECT_ROOT / f"parms_pc_{N}"
     outdir.mkdir(parents=True, exist_ok=True)
-    path = outdir / filename
-    
+    path = outdir / f"N{N}_a{alpha_a:.2f}_g{alpha_g:.2f}_d{dim}_m0_{m0}.json"
     data = {
         "comment": "use seed= -1 for random seed",
         "num_vertices": N,
@@ -37,210 +28,84 @@ def JsonGenerate(N: int, alpha_a : float, alpha_g : float, dim : int, m0 : int, 
         "dim": dim,
         "seed": -1,
         "m0": m0,
-        "run_mode" : int(run_mode)
+        "run_mode": run_mode,
+        "compute_dijkstra": compute_dijkstra,
+        "compute_spearman": compute_spearman,
     }
-
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-# def multithread_pc(N, NumSamples):
-#     filename = f"N_{N}_multithread_pc.sh"
-
-#     a = "#!/bin/bash\n\n"
-#     b = "# Define uma função que contêm o código para rodar em paralelo\n"
-#     c = "run_code() {\n\t"
-#     d = f"time ../build/exe1 ../parms_pc_{N}/$1\n"
-#     e = "}\n"
-#     e1 = """progress_bar() {\n \tlocal current=$1\n \tlocal total=$2\n \tlocal percent=$(( current * 100 / total))\n \tlocal filled=$(( percent * 50 / 100))\n \tlocal empty=$(( 50 - filled))\n"""
-#     e2 = """\tprintf "\\r[%-${filled}s%${empty}s] %d%% (%d/%d)" "#" "" "$percent" "$current" "$total" \n}\n\n"""
-#     g = "export -f run_code\n\n"
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    return path
 
 
-#     # check number of files in specific folders
-#     df = pd.read_csv("parameters.csv", sep=',')
-#     df_n = df[df["N"]==N]
-#     counts = []
-#     for _, row in df_n.iterrows():
-#         dim, alpha_a, alpha_g = int(row["dim"]),float(row["alpha_a"]), float(row["alpha_g"])
-        
-#         data_path = f"../../data_3/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/gml"
-#         counts.append(len(glob.glob(os.path.join(data_path, "*.gml.gz"))))
-    
-#     # Se nenhuma pasta foi encontrada
-#     if not counts:
-#         print("[WARN] Nenhuma pasta 'gml/' encontrada. Continuando com o valor total.")
-#         n_to_generate = NumSamples
-#     else:
-#         nss_min = min(counts)
-#         print(f"[INFO] Mínimo de arquivos encontrados em uma pasta: {nss_min}")
-#         n_to_generate = max(0, NumSamples - nss_min)
-#         print(f"[INFO] Gerando script para os {n_to_generate} restantes de {NumSamples}.")
+def multithread_pc(N: int, NumSamples: int) -> Path:
+    """Generate a launcher; the first real sample calibrates peak RAM."""
+    if NumSamples < 1:
+        raise ValueError("NumSamples must be at least 1")
+    launcher = SCRIPTS_DIR / f"N_{N}_multithread_pc.sh"
+    body = f'''#!/usr/bin/env bash
+set -euo pipefail
+script_dir="$(cd -- "$(dirname -- "${{BASH_SOURCE[0]}}")" && pwd)"
+cd "$script_dir"
 
-#     if n_to_generate == 0:
-#         print("[INFO] Todos os arquivos já foram gerados. Nenhum script necessário.")
-#         return
-
-#     # Caminho para arquivos json de parâmetros
-#     path_d = f"../../parms_pc_{N}"
-#     all_jsons = glob.glob(os.path.join(path_d, "*.json"))
-#     arguments = [os.path.basename(f) for f in all_jsons]
-
-#     h = "arguments=("
-#     i = " ".join(arguments) + ")\n\n"
-
-#     j = "x=0\n"
-#     k = f"n_samples={n_to_generate}\n"
-#     l = "while [ $x -lt $n_samples ]\n"
-#     m = "do\n\t"
-#     n = 'parallel run_code ::: "${arguments[@]}"\n\t'
-#     o = "x=$(( $x + 1))\n"
-#     o1 = '\tprogress_bar "$x" "$n_samples"\n '
-#     p = "done"
-
-#     list_for_loop = [a, b, c, d, e, e1, e2, g, h, i, j, k, l, m, n, o, o1, p]
-
-#     with open("../" + filename, "w") as l:
-#         for k in list_for_loop:
-#             l.write(k)
-def multithread_pc(N, NumSamples):
-    filename = f"N_{N}_multithread_pc.sh"
-
-    a = "#!/bin/bash\n\n"
-
-    # --- BLOCO NOVO: input/arg para limitar frequência máxima ---
-    freq_block = r"""# --- Limite opcional de frequência máxima (Linux cpufreq) ---
-    # Uso (recomendado):
-    #   sudo ./__SCRIPT__ --max-freq 2.5GHz
-    # ou sem args: ele pergunta interativamente
-    MAX_FREQ_INPUT=""
-
-    if [[ "${1:-}" == "--max-freq" ]]; then
-    MAX_FREQ_INPUT="${2:-}"
+# Optional CPU frequency limit retained from the previous launcher.
+# Restore the original limit when the queue finishes or is stopped.
+if [[ "${{1:-}}" != "--max-freq" && -t 0 ]]; then
+    read -r -p "Limitar freq máxima? (ex: 2.5GHz; vazio = não): " requested_frequency
+    if [[ -n "$requested_frequency" ]]; then
+        set -- --max-freq "$requested_frequency" "$@"
+    fi
+fi
+if [[ "${{1:-}}" == "--max-freq" ]]; then
+    if [[ $# -lt 2 ]]; then
+        echo "Uso: $0 --max-freq 2.5GHz" >&2
+        exit 2
+    fi
+    frequency="$2"
     shift 2
-    fi
-
-    if [[ -z "$MAX_FREQ_INPUT" ]]; then
-    read -r -p "Limitar freq máxima? (ex: 2.5GHz / 2500MHz / 2500000kHz; vazio = não): " MAX_FREQ_INPUT
-    fi
-
-    freq_to_khz() {
-    local v="${1// /}"
-    [[ -z "$v" ]] && echo "" && return 0
-    v="${v/,/.}"  # aceita vírgula como decimal
-
-    if [[ "$v" =~ ^[0-9]+(\.[0-9]+)?[Gg][Hh][Zz]$ ]]; then
-        awk -v x="${v%[Gg][Hh][Zz]}" 'BEGIN{printf "%.0f", x*1000000}'   # GHz -> kHz
-    elif [[ "$v" =~ ^[0-9]+(\.[0-9]+)?[Mm][Hh][Zz]$ ]]; then
-        awk -v x="${v%[Mm][Hh][Zz]}" 'BEGIN{printf "%.0f", x*1000}'      # MHz -> kHz
-    elif [[ "$v" =~ ^[0-9]+(\.[0-9]+)?[Kk][Hh][Zz]$ ]]; then
-        awk -v x="${v%[Kk][Hh][Zz]}" 'BEGIN{printf "%.0f", x}'           # kHz -> kHz
+    if [[ "$frequency" =~ ^([0-9]+([.,][0-9]+)?)([GgMmKk])[Hh][Zz]$ ]]; then
+        amount="${{BASH_REMATCH[1]//,/.}}"
+        unit="${{BASH_REMATCH[3],,}}"
+        case "$unit" in
+            g) factor=1000000 ;;
+            m) factor=1000 ;;
+            k) factor=1 ;;
+        esac
+        khz="$(awk -v amount="$amount" -v factor="$factor" 'BEGIN {{printf "%.0f", amount * factor}}')"
     else
-        echo "INVALID"
+        echo "Formato de frequência inválido: $frequency" >&2
+        exit 2
     fi
-    }
-
-    apply_max_freq() {
-    local in="$1"
-    local khz
-    khz="$(freq_to_khz "$in")"
-
-    if [[ "$khz" == "INVALID" ]]; then
-        echo "[WARN] Formato inválido para frequência: '$in'. Ignorando limite."
-        return 0
-    fi
-    [[ -z "$khz" ]] && return 0
-
-    if [[ $EUID -ne 0 ]]; then
-        echo "[WARN] Para limitar frequência, rode com sudo: sudo ./__SCRIPT__ --max-freq $in"
-        return 0
-    fi
-
-    if [[ ! -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq ]]; then
-        echo "[WARN] cpufreq não disponível em /sys (talvez WSL/driver ausente). Ignorando limite."
-        return 0
-    fi
-
-    ORIG_MAX_KHZ="$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq)"
-
-    trap 'if [[ -n "${ORIG_MAX_KHZ:-}" ]]; then
-            if command -v cpupower >/dev/null 2>&1; then
-                cpupower frequency-set -u "${ORIG_MAX_KHZ}kHz" >/dev/null 2>&1
-            elif command -v cpufreq-set >/dev/null 2>&1; then
-                cpufreq-set -u "${ORIG_MAX_KHZ}kHz" >/dev/null 2>&1
-            fi
-            fi' EXIT
-
-    echo "[INFO] Aplicando limite de freq máxima: ${khz}kHz"
-
-    if command -v cpupower >/dev/null 2>&1; then
-        cpupower frequency-set -u "${khz}kHz"
-    elif command -v cpufreq-set >/dev/null 2>&1; then
-        cpufreq-set -u "${khz}kHz"
+    cpu_freq_path=/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
+    if (( EUID != 0 )); then
+        echo "[WARN] --max-freq requer sudo; limite ignorado." >&2
+    elif [[ ! -f "$cpu_freq_path" ]]; then
+        echo "[WARN] cpufreq não está disponível; limite ignorado." >&2
     else
-        echo "[WARN] Nem 'cpupower' nem 'cpufreq-set' encontrados."
-        echo "       Instale (Ubuntu): sudo apt install linux-tools-common linux-tools-$(uname -r) cpufrequtils"
+        original_khz="$(cat "$cpu_freq_path")"
+        if command -v cpupower >/dev/null 2>&1; then
+            restore_frequency() {{ cpupower frequency-set -u "${{original_khz}}kHz" >/dev/null; }}
+            cpupower frequency-set -u "${{khz}}kHz"
+            trap restore_frequency EXIT
+        elif command -v cpufreq-set >/dev/null 2>&1; then
+            restore_frequency() {{ cpufreq-set -u "${{original_khz}}kHz" >/dev/null; }}
+            cpufreq-set -u "${{khz}}kHz"
+            trap restore_frequency EXIT
+        else
+            echo "[WARN] Instale cpupower ou cpufreq-set para usar --max-freq." >&2
+        fi
     fi
-    }
+fi
 
-    apply_max_freq "$MAX_FREQ_INPUT"
+python3 "$script_dir/python/run_benchmarked_jobs.py" \\
+    --binary "$script_dir/../build/exe1" \\
+    --params-dir "$script_dir/../parms_pc_{N}" \\
+    --working-dir "$script_dir" \\
+    --samples {NumSamples} "$@"
+'''
+    launcher.write_text(body, encoding="utf-8")
+    launcher.chmod(0o700)
+    return launcher
 
-    """
-    freq_block = freq_block.replace("__SCRIPT__", filename)
 
-
-    b = "# Define uma função que contêm o código para rodar em paralelo\n"
-    c = "run_code() {\n\t"
-    d = f"time ../build/exe1 ../parms_pc_{N}/$1\n"
-    e = "}\n"
-
-    e1 = """progress_bar() {\n \tlocal current=$1\n \tlocal total=$2\n \tlocal percent=$(( current * 100 / total))\n \tlocal filled=$(( percent * 50 / 100))\n \tlocal empty=$(( 50 - filled))\n"""
-    e2 = """\tprintf "\\r[%-${filled}s%${empty}s] %d%% (%d/%d)" "#" "" "$percent" "$current" "$total" \n}\n\n"""
-
-    g = "export -f run_code\n\n"
-
-    # check number of files in specific folders
-    df = pd.read_csv("parameters.csv", sep=',')
-    df_n = df[df["N"] == N]
-    counts = []
-    for _, row in df_n.iterrows():
-        dim, alpha_a, alpha_g = int(row["dim"]), float(row["alpha_a"]), float(row["alpha_g"])
-        data_path = f"../../data_3/N_{N}/dim_{dim}/alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}/gml"
-        counts.append(len(glob.glob(os.path.join(data_path, "*.gml.gz"))))
-
-    if not counts:
-        print("[WARN] Nenhuma pasta 'gml/' encontrada. Continuando com o valor total.")
-        n_to_generate = NumSamples
-    else:
-        nss_min = min(counts)
-        print(f"[INFO] Mínimo de arquivos encontrados em uma pasta: {nss_min}")
-        n_to_generate = max(0, NumSamples - nss_min)
-        print(f"[INFO] Gerando script para os {n_to_generate} restantes de {NumSamples}.")
-
-    if n_to_generate == 0:
-        print("[INFO] Todos os arquivos já foram gerados. Nenhum script necessário.")
-        return
-
-    path_d = f"../../parms_pc_{N}"
-    all_jsons = glob.glob(os.path.join(path_d, "*.json"))
-    arguments = [os.path.basename(f) for f in all_jsons]
-
-    h = "arguments=("
-    i = " ".join(arguments) + ")\n\n"
-
-    j = "x=0\n"
-    k = f"n_samples={n_to_generate}\n"
-    l = "while [ $x -lt $n_samples ]\n"
-    m = "do\n\t"
-    n = 'parallel run_code ::: "${arguments[@]}"\n\t'
-    o = "x=$(( $x + 1))\n"
-    o1 = '\tprogress_bar "$x" "$n_samples"\n '
-    p = "done\n"
-
-    # NOTE: freq_block entra logo após o shebang
-    list_for_loop = [a, freq_block, b, c, d, e, e1, e2, g, h, i, j, k, l, m, n, o, o1, p]
-
-    with open("../" + filename, "w") as out:
-        for chunk in list_for_loop:
-            out.write(chunk)
-def permission_run(N):
-	os.system(f"chmod 700 ../N_{N}_multithread_pc.sh")
+def permission_run(N: int) -> None:
+    """Kept for callers that already invoke this after generation."""
+    (SCRIPTS_DIR / f"N_{N}_multithread_pc.sh").chmod(0o700)

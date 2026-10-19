@@ -21,6 +21,7 @@ parms_pc_*/
 
 # Ignore all shell scripts
 scripts/*.sh
+!scripts/setup_python_env.sh
 scripts/python/*.sh
 
 # Files
@@ -28,6 +29,8 @@ scripts/python/*.sh
 
 # Ignore all folders
 *.pyc
+.venv/
+__pycache__/
 
 # data folders
 data/
@@ -40,3 +43,4 @@ data/
 # "!.*/time_process_seconds.txt"
 results/
 data_used_att.zip
+.venv

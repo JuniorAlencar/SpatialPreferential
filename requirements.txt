@@ -1,0 +1,19 @@
+numpy
+pandas
+scipy
+matplotlib
+networkx
+pyarrow
+scikit-learn
+statsmodels
+lmfit
+igraph
+tqdm
+jupyterlab
+notebook
+ipykernel
+ipywidgets
+# Used by saved notebook checkpoints.
+plotly
+seaborn
+Pillow

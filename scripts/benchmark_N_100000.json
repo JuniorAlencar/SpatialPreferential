@@ -1,0 +1,22 @@
+{
+  "benchmark_json": "N100000_a0.00_g1.00_d2_m0_2.json",
+  "benchmark_peak_rss_bytes": 41230336,
+  "benchmark_stage_seconds": {
+    "create_network": 26.362575422,
+    "compute_properties/Newman": 0.127274559,
+    "compute_properties/Clustering": 0.017752051,
+    "compute_properties/Short_BFS": 253.632995279,
+    "save_data/properties": 7.3655e-05
+  },
+  "largest_peak_rss_bytes": 41328640,
+  "effective_ram_limit_bytes": 16626536448,
+  "available_ram_after_benchmark_bytes": 9532354560,
+  "reserved_ram_bytes": 2493980467,
+  "per_job_safety_factor": 1.3,
+  "cpu_limit": 16,
+  "initial_max_simultaneous_jobs": 16,
+  "current_max_simultaneous_jobs": 16,
+  "planned_jobs": 225,
+  "completed_jobs": 20,
+  "status": "running"
+}

@@ -39,7 +39,8 @@ def ScriptGenerate(N, alpha_a, alpha_g, dim, NumSamples, m0):
         l.write(k)
     l.close()
 
-def JsonGenerate(N : int, alpha_a : float, alpha_g : float, dim : int, m0 : int, run_mode : int):
+def JsonGenerate(N : int, alpha_a : float, alpha_g : float, dim : int, m0 : int, run_mode : int,
+                 compute_dijkstra : bool = False, compute_spearman : bool = False):
     """
         N: number of nodes,\n
         alpha_a: expoential of distances between nodes\n
@@ -69,7 +70,9 @@ def JsonGenerate(N : int, alpha_a : float, alpha_g : float, dim : int, m0 : int,
         "dim": dim,
         "seed": -1,
         "m0": m0,
-        "run_mode": int(run_mode)
+        "run_mode": int(run_mode),
+        "compute_dijkstra": compute_dijkstra,
+        "compute_spearman": compute_spearman,
     }
 
     with open(path, "w", encoding="utf-8") as f:
