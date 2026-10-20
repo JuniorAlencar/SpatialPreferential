@@ -27,6 +27,7 @@ enum RunMode : int {
     BOTH = 3
 };
 
+
 class ProgressReporter {
     using Clock = std::chrono::steady_clock;
     json benchmark = json::object();
@@ -136,6 +137,19 @@ samargs read_parametes(const string& fname) {
 }
 
 int main(int argc, char* argv[]) {
+
+    // Path to exec
+    fs::path exe_path = fs::canonical("/proc/self/exe");
+
+    // Build to workscape/
+    fs::path workspace = exe_path.parent_path().parent_path();
+
+    // Folder in same lavel of src/ and build/
+    fs::path data_dir = workspace / "data";
+
+    // Create folder
+    fs::create_directories(data_dir);
+
     auto start_time = std::chrono::high_resolution_clock::now();
     
     if (argc != 2) {
@@ -151,15 +165,21 @@ int main(int argc, char* argv[]) {
     const bool compute_spearman = options.value("compute_spearman", false);
 
     // set filenames
-    char n_folder[50], alpha_folder[160], gml_folder[170], prop_folder[170], prop_file[200], gml_file[200], L_coast_file[200] ,time_process_file[200];
-    sprintf(n_folder, "./N_%d/m0_%d", xargs.num_vertices, xargs.m0);
-    sprintf(alpha_folder, "%s/dim_%d/alpha_a_%1.2f_alpha_g_%1.2f", n_folder, xargs.dim, xargs.alpha_a, xargs.alpha_g);
-    sprintf(gml_folder, "%s/gml", alpha_folder);
-    sprintf(prop_folder, "%s/prop", alpha_folder);
-    sprintf(L_coast_file, "%s/L_coast_%d.csv", prop_folder, xargs.seed);
-    sprintf(prop_file, "%s/prop_%d.csv", prop_folder, xargs.seed);
-    sprintf(gml_file, "%s/gml_%d.gml.gz", gml_folder, xargs.seed);
-    sprintf(time_process_file, "%s/time_process_seconds.txt", alpha_folder);
+    const string data_path = data_dir.string();
+    const string n_folder = data_path + "/N_" + to_string(xargs.num_vertices) +
+                            "/m0_" + to_string(xargs.m0);
+
+    ostringstream alpha_path;
+    alpha_path << n_folder << "/dim_" << xargs.dim
+               << "/alpha_a_" << fixed << setprecision(2) << xargs.alpha_a
+               << "_alpha_g_" << fixed << setprecision(2) << xargs.alpha_g;
+    const string alpha_folder = alpha_path.str();
+    const string gml_folder = alpha_folder + "/gml";
+    const string prop_folder = alpha_folder + "/prop";
+    const string L_coast_file = prop_folder + "/L_coast_" + to_string(xargs.seed) + ".csv";
+    const string prop_file = prop_folder + "/prop_" + to_string(xargs.seed) + ".csv";
+    const string gml_file = gml_folder + "/gml_" + to_string(xargs.seed) + ".gml.gz";
+    const string time_process_file = alpha_folder + "/time_process_seconds.txt";
     
     // create dir
     fs::create_directories(alpha_folder);

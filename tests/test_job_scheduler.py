@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """Checks real process scheduling with short stand-in network jobs."""
 
 import json
@@ -160,3 +161,5 @@ class SchedulerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+=======
+>>>>>>> refs/remotes/origin/main
