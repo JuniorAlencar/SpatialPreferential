@@ -1,10 +1,10 @@
 import src.MultithreadPC_Functions as FunctionsFile
 N = 10**5
-dim = 2
+dim = 4
 alpha_a = [i * dim for i in range(9)]
 alpha_g = [1.0, 3.0, 4.0, 5.0, 6.0]
 m0 = 2
-NumSamples = 5
+NumSamples = 2
 run_mode = 1
 compute_dijkstra = False
 compute_spearman = False

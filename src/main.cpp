@@ -27,6 +27,7 @@ enum RunMode : int {
     BOTH = 3
 };
 
+
 class ProgressReporter {
     using Clock = std::chrono::steady_clock;
     json benchmark = json::object();
@@ -136,6 +137,19 @@ samargs read_parametes(const string& fname) {
 }
 
 int main(int argc, char* argv[]) {
+
+    // Path to exec
+    fs::path exe_path = fs::canonical("/proc/self/exe");
+
+    // Build to workscape/
+    fs::path workspace = exe_path.parent_path().parent_path();
+
+    // Folder in same lavel of src/ and build/
+    fs::path data_dir = workspace / "data";
+
+    // Create folder
+    fs::create_directories(data_dir);
+
     auto start_time = std::chrono::high_resolution_clock::now();
     
     if (argc != 2) {
@@ -151,8 +165,10 @@ int main(int argc, char* argv[]) {
     const bool compute_spearman = options.value("compute_spearman", false);
 
     // set filenames
-    char n_folder[50], alpha_folder[160], gml_folder[170], prop_folder[170], prop_file[200], gml_file[200], L_coast_file[200] ,time_process_file[200];
-    sprintf(n_folder, "./N_%d/m0_%d", xargs.num_vertices, xargs.m0);
+    char n_folder[512], alpha_folder[512], gml_folder[512], prop_folder[512], prop_file[200], gml_file[200], L_coast_file[200] ,time_process_file[200];
+    string data_path = data_dir.string();
+    
+    sprintf(n_folder, "%s/N_%d/m0_%d",data_path, xargs.num_vertices, xargs.m0);
     sprintf(alpha_folder, "%s/dim_%d/alpha_a_%1.2f_alpha_g_%1.2f", n_folder, xargs.dim, xargs.alpha_a, xargs.alpha_g);
     sprintf(gml_folder, "%s/gml", alpha_folder);
     sprintf(prop_folder, "%s/prop", alpha_folder);
