@@ -4,10 +4,10 @@ dim = 2
 alpha_a = [i * dim for i in range(9)]
 alpha_g = [1.0, 3.0, 4.0, 5.0, 6.0]
 m0 = 4
-NumSamples = 2
+NumSamples = 10
 run_mode = 1
-compute_dijkstra = False
-compute_spearman = False
+compute_dijkstra = True
+compute_spearman = True
 
 for aA in alpha_a:
     for aG in alpha_g:

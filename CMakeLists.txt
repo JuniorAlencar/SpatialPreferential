@@ -49,6 +49,7 @@ target_include_directories( exe1 PUBLIC
 target_compile_options(exe1 PUBLIC -Wall -Wextra -Werror)
 
 target_compile_definitions(exe1 PRIVATE
+    SPATIAL_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}"
     $<$<CONFIG:Release>:RELEASE_BUILD>
 )
 

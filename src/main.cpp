@@ -21,6 +21,13 @@ namespace fs = boost::filesystem;
 
 using namespace std;
 
+// O CMake define este valor com o caminho absoluto da raiz do projeto.
+// O fallback permite também compilar o arquivo diretamente, usando o
+// diretório de execução como raiz dos dados.
+#ifndef SPATIAL_PROJECT_ROOT
+#define SPATIAL_PROJECT_ROOT "."
+#endif
+
 enum RunMode : int {
     PROPS_ONLY = 1,
     NETWORK_ONLY = 2,
@@ -138,14 +145,10 @@ samargs read_parametes(const string& fname) {
 
 int main(int argc, char* argv[]) {
 
-    // Path to exec
-    fs::path exe_path = fs::canonical("/proc/self/exe");
-
-    // Build to workscape/
-    fs::path workspace = exe_path.parent_path().parent_path();
-
-    // Folder in same lavel of src/ and build/
-    fs::path data_dir = workspace / "data";
+    // Diretório do projeto, definido pelo CMake durante a compilação.
+    // Assim, o local dos resultados não muda quando o executável é copiado
+    // ou instalado fora de build/.
+    fs::path data_dir = fs::path(SPATIAL_PROJECT_ROOT) / "Data";
 
     // Create folder
     fs::create_directories(data_dir);
