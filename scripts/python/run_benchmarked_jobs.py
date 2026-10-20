@@ -155,7 +155,7 @@ def launch(binary: Path, task: Task, working_dir: Path,
     input_dir = stats_dir / f"input_{identifier}"
     input_dir.mkdir()
     input_file = input_dir / task.parameter_file.name
-    input_file.write_text(json.dumps({**task.configuration, "seed": task.seed}), encoding="utf-8")
+    input_file.write_text(json.dumps(task.configuration), encoding="utf-8")
     environment = os.environ.copy()
     environment["SPATIAL_STAGE_METRICS_FILE"] = str(stages_file)
     if stage_benchmark:

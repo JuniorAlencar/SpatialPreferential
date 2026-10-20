@@ -1,22 +1,22 @@
 {
-  "benchmark_json": "N100000_a0.00_g1.00_d4_m0_2.json",
-  "benchmark_peak_rss_bytes": 40714240,
+  "benchmark_json": "N100000_a0.00_g1.00_d2_m0_4.json",
+  "benchmark_peak_rss_bytes": 71073792,
   "benchmark_stage_seconds": {
-    "create_network": 31.08837616,
-    "compute_properties/Newman": 0.078431869,
-    "compute_properties/Clustering": 0.015013982,
-    "compute_properties/Short_BFS": 219.466144524,
-    "save_data/properties": 9.4735e-05
+    "create_network": 61.61823653,
+    "compute_properties/Newman": 0.154572129,
+    "compute_properties/Clustering": 0.019994254,
+    "compute_properties/Short_BFS": 274.354752997,
+    "save_data/properties": 7.6551e-05
   },
-  "largest_peak_rss_bytes": 41496576,
-  "effective_ram_limit_bytes": 33001984000,
-  "available_ram_after_benchmark_bytes": 25969037312,
-  "reserved_ram_bytes": 4950297600,
+  "largest_peak_rss_bytes": 71073792,
+  "effective_ram_limit_bytes": 33001979904,
+  "available_ram_after_benchmark_bytes": 24096817152,
+  "reserved_ram_bytes": 4950296985,
   "per_job_safety_factor": 1.3,
   "cpu_limit": 12,
   "initial_max_simultaneous_jobs": 12,
   "current_max_simultaneous_jobs": 12,
-  "planned_jobs": 450,
-  "completed_jobs": 380,
+  "planned_jobs": 90,
+  "completed_jobs": 1,
   "status": "interrupted"
 }
