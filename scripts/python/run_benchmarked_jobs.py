@@ -29,6 +29,7 @@ RESERVE_FRACTION = 0.15  # Leave this fraction of machine RAM for the OS.
 class Task:
     parameter_file: Path
     configuration: dict
+    seed: int
 
 
 def _read_int(path: Path) -> int | None:
@@ -86,50 +87,63 @@ def capacity(total: int, peak: int, cpu: int, user_cap: int | None = None) -> in
     return min(cpu, user_cap or cpu, memory_slots)
 
 
-def existing_samples(config: dict, working_dir: Path) -> int:
-    """Count actual outputs where exe1 writes them for each run mode."""
+def output_folder(config: dict, working_dir: Path) -> Path:
+    """Return the directory where exe1 writes a configuration's outputs."""
     n = config["num_vertices"]
     m0 = config["m0"]
     dim = config["dim"]
     alpha_a = config["alpha_a"]
     alpha_g = config["alpha_g"]
-    folder = (working_dir / f"N_{n}" / f"m0_{m0}" / f"dim_{dim}"
-              / f"alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}")
-    props = {p.name[5:-4] for p in (folder / "prop").glob("prop_*.csv")}
-    networks = {p.name[4:-7] for p in (folder / "gml").glob("gml_*.gml.gz")}
-    mode = config["run_mode"]
-    if mode == 1:
-        return len(props)
-    if mode == 2:
-        return len(networks)
-    if mode == 3:
-        return len(props & networks)
-    raise ValueError(f"Invalid run_mode {mode}")
+    return (working_dir / f"N_{n}" / f"m0_{m0}" / f"dim_{dim}"
+            / f"alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}")
+
+
+def used_seeds(folder: Path) -> set[int]:
+    """Reserve seeds from both output types, including incomplete prior runs."""
+    seeds = set()
+    for directory, pattern, prefix, suffix in (
+        ("prop", "prop_*.csv", "prop_", ".csv"),
+        ("gml", "gml_*.gml.gz", "gml_", ".gml.gz"),
+    ):
+        for path in (folder / directory).glob(pattern):
+            value = path.name[len(prefix):-len(suffix)]
+            if value.isdecimal():
+                seeds.add(int(value))
+    return seeds
 
 
 def plan_tasks(params_dir: Path, samples: int, working_dir: Path) -> deque[Task]:
     configs = []
+    reserved = {}
     for path in sorted(params_dir.glob("*.json")):
         config = json.loads(path.read_text(encoding="utf-8"))
         if "num_vertices" not in config or "run_mode" not in config:
             raise ValueError(f"Invalid parameter file: {path}")
-        remaining = max(0, samples - existing_samples(config, working_dir))
-        if remaining:
-            configs.append((Task(path, config), remaining))
+        folder = output_folder(config, working_dir)
+        if folder not in reserved:
+            reserved[folder] = used_seeds(folder)
+        configs.append((path, config, folder))
     if not configs:
         return deque()
 
     # The most memory-demanding case is a safer first calibration. Iterate
     # configurations round-robin afterward, rather than in synchronized waves.
-    configs.sort(key=lambda pair: (
-        pair[0].configuration["num_vertices"] * pair[0].configuration["m0"],
-        {3: 2, 1: 1, 2: 0}[pair[0].configuration["run_mode"]],
+    configs.sort(key=lambda item: (
+        item[1]["num_vertices"] * item[1]["m0"],
+        {3: 2, 1: 1, 2: 0}[item[1]["run_mode"]],
     ), reverse=True)
     tasks = deque()
-    for round_index in range(samples):
-        for task, remaining in configs:
-            if round_index < remaining:
-                tasks.append(task)
+    next_seed = {folder: 1 for folder in reserved}
+    for _ in range(samples):
+        for path, config, folder in configs:
+            seed = next_seed[folder]
+            while seed in reserved[folder]:
+                seed += 1
+            if seed > 2147483647:
+                raise RuntimeError(f"No available positive seed for {folder}")
+            reserved[folder].add(seed)
+            next_seed[folder] = seed + 1
+            tasks.append(Task(path, config, seed))
     return tasks
 
 
@@ -138,13 +152,17 @@ def launch(binary: Path, task: Task, working_dir: Path,
            stage_benchmark: dict | None = None) -> tuple[subprocess.Popen, Path, Path]:
     stats_file = stats_dir / f"peak_{identifier}.txt"
     stages_file = stats_dir / f"stages_{identifier}.jsonl"
+    input_dir = stats_dir / f"input_{identifier}"
+    input_dir.mkdir()
+    input_file = input_dir / task.parameter_file.name
+    input_file.write_text(json.dumps({**task.configuration, "seed": task.seed}), encoding="utf-8")
     environment = os.environ.copy()
     environment["SPATIAL_STAGE_METRICS_FILE"] = str(stages_file)
     if stage_benchmark:
         environment["SPATIAL_STAGE_BENCHMARK"] = json.dumps(stage_benchmark)
     process = subprocess.Popen(
         ["/usr/bin/time", "-f", "%M", "-o", str(stats_file),
-         str(binary), str(task.parameter_file)],
+         str(binary), str(input_file)],
         cwd=working_dir,
         start_new_session=True,
         env=environment,
@@ -196,7 +214,7 @@ def run(args: argparse.Namespace) -> int:
         raise FileNotFoundError(f"Parameter directory not found: {params_dir}")
     tasks = plan_tasks(params_dir, args.samples, working_dir)
     if not tasks:
-        print("Todas as amostras já existem; nenhum job necessário.", flush=True)
+        print("Nenhum JSON de parâmetros encontrado; nenhum job necessário.", flush=True)
         return 0
 
     total_jobs = len(tasks)
@@ -339,7 +357,7 @@ def main() -> int:
     parser.add_argument("--params-dir", type=Path, required=True)
     parser.add_argument("--working-dir", type=Path, required=True)
     parser.add_argument("--samples", type=int, required=True,
-                        help="Desired number of existing + new samples per JSON")
+                        help="Number of new samples per JSON on this run")
     parser.add_argument("--max-jobs", "--max-threads", dest="max_jobs", type=int,
                         help="Maximum simultaneous jobs (threads in the launcher)")
     args = parser.parse_args()

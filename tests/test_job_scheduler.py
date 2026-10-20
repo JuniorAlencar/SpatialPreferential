@@ -49,19 +49,24 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(jobs.capacity(8 * gib, 2 * gib, 1), 1)
         self.assertEqual(jobs.capacity(8 * gib, 2 * gib, 16, 1), 1)
 
-    def test_existing_samples_match_the_requested_output_mode(self):
+    def test_each_run_plans_new_samples_and_skips_existing_seeds(self):
         with tempfile.TemporaryDirectory() as temp:
-            folder = (Path(temp) / "N_12/m0_2/dim_2/alpha_a_0.00_alpha_g_1.00")
+            root = Path(temp)
+            folder = root / "N_12/m0_2/dim_2/alpha_a_0.00_alpha_g_1.00"
             (folder / "prop").mkdir(parents=True)
             (folder / "gml").mkdir()
-            for name in ("prop_10.csv", "prop_20.csv"):
+            for name in ("prop_1.csv", "prop_2.csv"):
                 (folder / "prop" / name).touch()
-            for name in ("gml_10.gml.gz", "gml_30.gml.gz"):
+            for name in ("gml_3.gml.gz", "gml_4.gml.gz"):
                 (folder / "gml" / name).touch()
-            config = dict(num_vertices=12, m0=2, dim=2, alpha_a=0., alpha_g=1.)
-            self.assertEqual(jobs.existing_samples(dict(config, run_mode=1), Path(temp)), 2)
-            self.assertEqual(jobs.existing_samples(dict(config, run_mode=2), Path(temp)), 2)
-            self.assertEqual(jobs.existing_samples(dict(config, run_mode=3), Path(temp)), 1)
+            params = root / "params"
+            params.mkdir()
+            (params / "A.json").write_text(json.dumps(dict(
+                num_vertices=12, m0=2, dim=2, alpha_a=0., alpha_g=1.,
+                run_mode=3, seed=-1)))
+            planned = jobs.plan_tasks(params, 5, root)
+            self.assertEqual([task.seed for task in planned], [5, 6, 7, 8, 9])
+            self.assertEqual(len(jobs.plan_tasks(params, 5, root)), 5)
 
     def test_replaces_completed_job_while_another_is_running(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -100,8 +105,7 @@ class SchedulerTests(unittest.TestCase):
             self.assertEqual(report["status"], "complete")
             again = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=5)
             self.assertEqual(again.returncode, 0)
-            self.assertIn("nenhum job", again.stdout)
-            self.assertEqual(len(events_file.read_text().splitlines()), len(events))
+            self.assertEqual(len(events_file.read_text().splitlines()), len(events) + 8)
 
     def test_failed_benchmark_stops_before_scheduling_more(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -120,8 +120,9 @@ O terminal mostra a etapa em execução, o progresso da criação da rede a cada
 usa o ritmo observado durante a execução; nas seguintes, usa os tempos medidos
 no benchmark para cada etapa, incluindo as propriedades e a gravação dos dados.
 
-O executor conta as amostras já presentes por configuração e modo de execução
-e produz somente as que faltam até `NumSamples`. O shell pode receber
+Cada execução produz `NumSamples` amostras novas por configuração, mesmo que
+já existam resultados anteriores. O executor escolhe sementes ainda não usadas
+pelos arquivos de saída para preservar as amostras existentes. O shell pode receber
 `--max-jobs 4` para impor um teto manual, ou `--max-freq 2.5GHz` para o limite
 de frequência já previsto anteriormente. Com `run_mode=1` e `N=100000`, o
 primeiro benchmark também executa o cálculo exato de propriedades e pode demorar.
