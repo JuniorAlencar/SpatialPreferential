@@ -35,6 +35,9 @@ scripts/python/*.sh
 .venv/
 __pycache__/
 
+# Jupyter creates these transient notebook backups automatically.
+**/.ipynb_checkpoints/
+
 # data folders
 data/
 
