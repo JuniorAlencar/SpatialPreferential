@@ -10,7 +10,8 @@ SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 
 def JsonGenerate(N: int, alpha_a: float, alpha_g: float, dim: int,
                  m0: int, run_mode: int, compute_dijkstra: bool = False,
-                 compute_spearman: bool = False) -> Path:
+                 compute_spearman: bool = False,
+                 compute_bfs_all: bool = False) -> Path:
     """Write one input JSON for exe1 and return its path."""
     if run_mode not in {1, 2, 3}:
         raise ValueError("run_mode must be 1 (props), 2 (network) or 3 (both).")
@@ -31,6 +32,7 @@ def JsonGenerate(N: int, alpha_a: float, alpha_g: float, dim: int,
         "run_mode": run_mode,
         "compute_dijkstra": compute_dijkstra,
         "compute_spearman": compute_spearman,
+        "compute_bfs_all": compute_bfs_all,
     }
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     return path

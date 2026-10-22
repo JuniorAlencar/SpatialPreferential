@@ -18,14 +18,14 @@ def test_processing_writes_aggregate_into_data_root(tmp_path):
     prop_dir.mkdir(parents=True)
 
     header = (
-        "#MeanShortestPathDijstrika,MeanShortestPathBFS,Ass_Spearman,"
+        "#MeanShortestPathDijstrika,MeanShortestPathBFS,MeanShortestPathBFSSampled1000,Ass_Spearman,"
         "Ass_Spearman_error,Ass_Newman,Ass_Newman_error,ClusterCoefficient\n"
     )
     (prop_dir / "prop_1.csv").write_text(
-        header + "2,4,0.1,0.01,0.2,0.02,0.3\n"
+        header + "2,4,4.5,0.1,0.01,0.2,0.02,0.3\n"
     )
     (prop_dir / "prop_2.csv").write_text(
-        header + "4,6,0.3,0.03,0.4,0.04,0.5\n"
+        header + "4,6,6.5,0.3,0.03,0.4,0.04,0.5\n"
     )
 
     _, result = processing_all_data(tmp_path / "Data")
@@ -41,3 +41,4 @@ def test_processing_writes_aggregate_into_data_root(tmp_path):
     assert row["N_samples"] == 2
     assert row["Short_Cost_mean"] == 3.0
     assert row["Short_BFS_mean"] == 5.0
+    assert row["Short_BFS_sampled_1000_mean"] == 5.5

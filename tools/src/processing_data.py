@@ -14,7 +14,7 @@ def create_folders(folder_path):
     os.makedirs(folder_path, exist_ok=True)
     print(f"Directory '{folder_path}' ensured to exist.")
 
-dict_keys = ["filename","ShortestCost","ShortestBFS",
+dict_keys = ["filename","ShortestCost","ShortestBFS","ShortestBFSSampled1000",
              "R_Spearman","R_Spearman_err","R_Newman","R_Newman_err",
              "ClusterCoefficient"]
 
@@ -28,6 +28,7 @@ def _norm(s: str) -> str:
 NORM_MAP = {
     _norm('MeanShortestPathDijstrika'): 'ShortestCost',
     _norm('MeanShortestPathBFS'):       'ShortestBFS',
+    _norm('MeanShortestPathBFSSampled1000'): 'ShortestBFSSampled1000',
     _norm('Ass_Spearman'):              'R_Spearman',
     _norm('Ass_Spearman_error'):        'R_Spearman_err',
     _norm('Ass_Newman'):                'R_Newman',
@@ -258,6 +259,7 @@ def build_all_means(root_or_prop_path: str, output_path: str | os.PathLike | Non
         "N":[], "m0":[], "dim":[], "alpha_a":[], "alpha_g":[],
         "N_samples":[], "Short_Cost_mean":[], "Short_Cost_error":[],
         "Short_BFS_mean":[], "Short_BFS_error":[],
+        "Short_BFS_sampled_1000_mean":[], "Short_BFS_sampled_1000_error":[],
         "R_Spearman_mean":[], "R_Spearman_error":[],
         "R_Newman_mean":[],  "R_Newman_error":[],
         "ClusterCoefficient_mean":[], "ClusterCoefficient_error":[]
@@ -293,6 +295,7 @@ def build_all_means(root_or_prop_path: str, output_path: str | os.PathLike | Non
 
         shortest_cost = col("ShortestCost")
         shortest_bfs  = col("ShortestBFS")
+        shortest_bfs_sampled_1000 = col("ShortestBFSSampled1000")
         r_spear       = col("R_Spearman")
         r_spear_err   = col("R_Spearman_err")  # erros por amostra
         r_new         = col("R_Newman")
@@ -302,6 +305,7 @@ def build_all_means(root_or_prop_path: str, output_path: str | os.PathLike | Non
         # MÉDIAS (ignorando NaN)
         sc_mean  = shortest_cost.mean(skipna=True)
         sb_mean  = shortest_bfs.mean(skipna=True)
+        sbs_mean = shortest_bfs_sampled_1000.mean(skipna=True)
         rs_mean  = r_spear.mean(skipna=True)
         rn_mean  = r_new.mean(skipna=True)
         cc_mean  = cluster.mean(skipna=True)
@@ -309,6 +313,7 @@ def build_all_means(root_or_prop_path: str, output_path: str | os.PathLike | Non
         # ERROS
         sc_err = _sem(shortest_cost)
         sb_err = _sem(shortest_bfs)
+        sbs_err = _sem(shortest_bfs_sampled_1000)
         # combina SEM com erros individuais reportados
         rs_err = _combined_error_with_per_sample(r_spear, r_spear_err)
         rn_err = _combined_error_with_per_sample(r_new,   r_new_err)
@@ -328,6 +333,8 @@ def build_all_means(root_or_prop_path: str, output_path: str | os.PathLike | Non
 
         dict_all_data["Short_BFS_mean"].append(sb_mean)
         dict_all_data["Short_BFS_error"].append(sb_err)
+        dict_all_data["Short_BFS_sampled_1000_mean"].append(sbs_mean)
+        dict_all_data["Short_BFS_sampled_1000_error"].append(sbs_err)
 
         dict_all_data["R_Spearman_mean"].append(rs_mean)
         dict_all_data["R_Spearman_error"].append(rs_err)

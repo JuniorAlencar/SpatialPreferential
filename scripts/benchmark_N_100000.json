@@ -1,24 +1,22 @@
 {
-  "benchmark_json": "N100000_a0.00_g1.00_d2_m0_4.json",
-  "benchmark_peak_rss_bytes": 83939328,
+  "benchmark_json": "N100000_a0.00_g1.00_d4_m0_2.json",
+  "benchmark_peak_rss_bytes": 41136128,
   "benchmark_stage_seconds": {
-    "create_network": 61.424285637,
-    "compute_properties/Newman": 0.154981068,
-    "compute_properties/Spearman": 0.431398545,
-    "compute_properties/Clustering": 0.021404192,
-    "compute_properties/Shortest_Dijkstra": 2625.413339451,
-    "compute_properties/Short_BFS": 271.941781037,
-    "save_data/properties": 7.8434e-05
+    "create_network": 30.939111154,
+    "compute_properties/Newman": 0.078387964,
+    "compute_properties/Clustering": 0.012956196,
+    "compute_properties/Short_BFS_sampled": 2.376958303,
+    "save_data/properties": 0.000101802
   },
-  "largest_peak_rss_bytes": 84537344,
-  "effective_ram_limit_bytes": 33001979904,
-  "available_ram_after_benchmark_bytes": 29308653568,
-  "reserved_ram_bytes": 4950296985,
+  "largest_peak_rss_bytes": 41136128,
+  "effective_ram_limit_bytes": 33001975808,
+  "available_ram_after_benchmark_bytes": 22654910464,
+  "reserved_ram_bytes": 4950296371,
   "per_job_safety_factor": 1.3,
   "cpu_limit": 12,
   "initial_max_simultaneous_jobs": 12,
   "current_max_simultaneous_jobs": 12,
-  "planned_jobs": 450,
-  "completed_jobs": 25,
-  "status": "interrupted"
+  "planned_jobs": 1080,
+  "completed_jobs": 18,
+  "status": "running"
 }
