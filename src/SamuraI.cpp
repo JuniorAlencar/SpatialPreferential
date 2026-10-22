@@ -229,6 +229,64 @@ Navigation_BFS SamuraI::computeGlobalNavigation_BFS() {
     return result;
 }
 
+Navigation_BFS SamuraI::computeGlobalNavigation_BFSSampled(std::size_t sample_size) {
+    Navigation_BFS result;
+    const std::size_t n = boost::num_vertices(G);
+    if (n <= 1 || sample_size == 0) return result;
+
+    // Sampling sources uniformly without replacement makes the average of
+    // their distances to all other vertices an unbiased estimator of the
+    // all-pairs mean shortest-path length.
+    sample_size = std::min(sample_size, n);
+    std::vector<vertex_t> sources(n);
+    std::iota(sources.begin(), sources.end(), vertex_t{0});
+    std::mt19937 sampler(static_cast<std::mt19937::result_type>(m_seed));
+    std::shuffle(sources.begin(), sources.end(), sampler);
+    sources.resize(sample_size);
+
+    // As in the complete BFS calculation, build the adjacency storage once
+    // and reuse queue and distance buffers for every sampled source.
+    std::vector<std::size_t> offsets(n + 1, 0);
+    std::vector<vertex_t> neighbors;
+    neighbors.reserve(2 * boost::num_edges(G));
+    for (vertex_t u = 0; u < n; ++u) {
+        for (auto v : boost::make_iterator_range(boost::adjacent_vertices(u, G)))
+            neighbors.push_back(v);
+        offsets[u + 1] = neighbors.size();
+    }
+
+    std::vector<int> distance(n);
+    std::vector<vertex_t> queue(n);
+    long double sum = 0.0L;
+    for (std::size_t source_index = 0; source_index < sample_size; ++source_index) {
+        const vertex_t source = sources[source_index];
+        std::fill(distance.begin(), distance.end(), -1);
+        distance[source] = 0;
+        queue[0] = source;
+        std::size_t tail = 1;
+        for (std::size_t head = 0; head < tail; ++head) {
+            const vertex_t u = queue[head];
+            for (std::size_t j = offsets[u]; j < offsets[u + 1]; ++j) {
+                const vertex_t v = neighbors[j];
+                if (distance[v] != -1) continue;
+                distance[v] = distance[u] + 1;
+                queue[tail++] = v;
+            }
+        }
+        for (const int d : distance) {
+            // Preserve the full-BFS convention: unreachable vertices add zero
+            // while remaining in the estimator's N - 1 denominator.
+            if (d < 0) continue;
+            sum += d;
+            result.diamater = std::max(result.diamater, d);
+        }
+        reportProgress(source_index + 1, sample_size);
+    }
+    result.shortestpath = static_cast<double>(sum /
+        (static_cast<long double>(sample_size) * static_cast<long double>(n - 1)));
+    return result;
+}
+
 
 void SamuraI::add_weighted_edge(int u, int v) {
     auto [e, ok] = boost::add_edge(u, v, G);
@@ -797,4 +855,3 @@ void SamuraI::clear() {
     G.clear();
     pos.clear();
 };
-

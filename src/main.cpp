@@ -166,6 +166,9 @@ int main(int argc, char* argv[]) {
     const json options = json::parse(options_file);
     const bool compute_dijkstra = options.value("compute_dijkstra", false);
     const bool compute_spearman = options.value("compute_spearman", false);
+    // The 1,000-source estimator from Fig. 3 is the default.  Retain the
+    // previous all-sources BFS behind an explicit option.
+    const bool compute_bfs_all = options.value("compute_bfs_all", false);
 
     // set filenames
     const string data_path = data_dir.string();
@@ -212,6 +215,7 @@ int main(int argc, char* argv[]) {
         double C = 0.0;
         Navigation_COST shortest_cost;
         Navigation_BFS shortest_bfs;
+        Navigation_BFS shortest_bfs_sampled;
         run_stage("compute_properties/Newman", [&] {
             r_newman = S.computeAssortativityCoefficientNewmanDAGJK(100, true);
         });
@@ -226,18 +230,25 @@ int main(int argc, char* argv[]) {
             run_stage("compute_properties/Shortest_Dijkstra", [&] {
                 shortest_cost = S.computeGlobalNavigationDijkstraExact();
             });
-        run_stage("compute_properties/Short_BFS", [&] {
-            shortest_bfs = S.computeGlobalNavigation_BFS();
+        if (compute_bfs_all)
+            run_stage("compute_properties/Short_BFS", [&] {
+                shortest_bfs = S.computeGlobalNavigation_BFS();
+            });
+        run_stage("compute_properties/Short_BFS_sampled", [&] {
+            shortest_bfs_sampled = S.computeGlobalNavigation_BFSSampled();
         });
         run_stage("save_data/properties", [&] {
             std::cout << prop_file << std::endl;
             std::ofstream pout(prop_file);
             pout << "#MeanShortestPathDijstrika, " << "#MeanShortestPathBFS, "
+                << "#MeanShortestPathBFSSampled1000, "
                 << "#Ass_Spearman, " << "#Ass_Spearman_error, "
                 << "#Ass_Newman, " << "#Ass_Newman_error, "
                 << "#ClusterCoefficient\n";
             if (compute_dijkstra) pout << shortest_cost.shortestpath;
-            pout << "," << shortest_bfs.shortestpath << ",";
+            pout << ",";
+            if (compute_bfs_all) pout << shortest_bfs.shortestpath;
+            pout << "," << shortest_bfs_sampled.shortestpath << ",";
             if (compute_spearman) pout << r_spearman.R << "," << r_spearman.error;
             else pout << ",";
             pout << "," << r_newman.R << "," << r_newman.error << "," << C << "\n";

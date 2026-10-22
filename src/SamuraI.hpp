@@ -134,6 +134,9 @@ class SamuraI {
     void writeDegrees(std::string fname);
     void writeConnections(std::string fname);
 	Navigation_BFS computeGlobalNavigation_BFS(void);
+    // Unbiased estimate of the mean topological distance, using BFS from a
+    // uniform sample of source vertices (1,000 in the Fig. 3 procedure).
+    Navigation_BFS computeGlobalNavigation_BFSSampled(std::size_t sample_size = 1000);
     Navigation_COST computeGlobalNavigationDijkstraExact(void);    
     
     void writeGML(std::string fname);

@@ -3,6 +3,7 @@ import csv
 import glob
 import re
 from math import nan
+from pathlib import Path
 import pandas as pd
 import numpy as np
 
@@ -237,11 +238,12 @@ def _combined_error_with_per_sample(values: pd.Series, per_sample_errs: pd.Serie
     return np.sqrt((sem ** 2) + (sum_sigma2 / (n ** 2)))
 
 # ==== função principal pedida ====
-def build_all_means(root_or_prop_path: str):
+def build_all_means(root_or_prop_path: str, output_path: str | os.PathLike | None = None):
     """
     Percorre cada pasta 'prop' que tiver um 'all_data.dat' e monta o dict_all_data
     com médias e erros.
 
+    O CSV consolidado e' salvo em ``<root>/all_data.csv`` por padrao.
     Retorna (dict_all_data, df_all).
     """
     root_or_prop_path = os.path.normpath(root_or_prop_path)
@@ -284,7 +286,10 @@ def build_all_means(root_or_prop_path: str):
         n_samples = len(df.index)
 
         # pega colunas (se não existirem, vira série vazia p/ dar NaN)
-        col = lambda name: df[name] if name in df.columns else pd.Series(dtype=float)
+        def col(name):
+            if name not in df.columns:
+                return pd.Series(dtype=float)
+            return pd.to_numeric(df[name], errors="coerce")
 
         shortest_cost = col("ShortestCost")
         shortest_bfs  = col("ShortestBFS")
@@ -334,8 +339,20 @@ def build_all_means(root_or_prop_path: str):
         dict_all_data["ClusterCoefficient_error"].append(cc_err)
 
     df_all = pd.DataFrame(dict_all_data)
-    df_all.to_csv("../../data/all_data.csv", sep=',', index=False)
+
+    if output_path is None:
+        if _is_prop_dir(root_or_prop_path):
+            # prop -> alpha -> dim -> m0 -> N -> Data
+            output_path = Path(root_or_prop_path).resolve().parents[4] / "all_data.csv"
+        else:
+            output_path = Path(root_or_prop_path) / "all_data.csv"
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df_all.to_csv(output_path, sep=",", index=False)
+    print(f"[UPDATE] Save aggregate data in: {output_path}")
+    return dict_all_data, df_all
 
 def processing_all_data(root):
     create_data_folder(root)   # percorre toda a árvore e cria um all_data.dat em cada 'prop/'
-    build_all_means(root)
+    return build_all_means(root)
