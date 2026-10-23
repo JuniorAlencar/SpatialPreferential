@@ -1,11 +1,11 @@
 import src.MultithreadPC_Functions as FunctionsFile
 N = 10**5
-dim = 4
+dim = 2
 alpha_a = [i * dim for i in range(9)]
 alpha_g = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 m0 = 2
-NumSamples = 20
-run_mode = 1
+NumSamples = 50
+run_mode = 3
 compute_dijkstra = False
 compute_spearman = False
 # False keeps the default BFS from 1,000 random source sites. Set to True

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Run exe1 samples with concurrency measured from one real sample's peak RSS.
+"""Bring every exe1 configuration to a target sample count in parallel.
 
-The first queued sample is the benchmark and counts toward --samples. GNU time
-records its peak RSS. Remaining samples run from a continuous queue: each
-completion frees a slot, and a new job starts as soon as the RAM and CPU limits
-allow it. Linux /proc and cgroup limits are used without extra Python packages.
+The first queued sample is the benchmark and counts toward the target. Existing
+output seeds are counted first, so --samples is the desired total per JSON, not
+the number of additional samples for every invocation. GNU time records peak
+RSS, then remaining jobs run from a continuous queue as RAM and CPU allow.
+Linux /proc and cgroup limits are used without extra Python packages.
 """
 
 import argparse
@@ -94,7 +95,13 @@ def output_folder(config: dict, working_dir: Path) -> Path:
     dim = config["dim"]
     alpha_a = config["alpha_a"]
     alpha_g = config["alpha_g"]
-    return (working_dir / f"N_{n}" / f"m0_{m0}" / f"dim_{dim}"
+    # exe1 stores output under the project-level Data directory.  Keep the
+    # working-directory fallback for standalone scheduler use and tests.
+    data_dir = working_dir / "Data"
+    if not data_dir.is_dir():
+        project_data_dir = working_dir.parent / "Data"
+        data_dir = project_data_dir if project_data_dir.is_dir() else working_dir
+    return (data_dir / f"N_{n}" / f"m0_{m0}" / f"dim_{dim}"
             / f"alpha_a_{alpha_a:.2f}_alpha_g_{alpha_g:.2f}")
 
 
@@ -113,6 +120,7 @@ def used_seeds(folder: Path) -> set[int]:
 
 
 def plan_tasks(params_dir: Path, samples: int, working_dir: Path) -> deque[Task]:
+    """Plan only the samples missing from the total requested per JSON."""
     configs = []
     reserved = {}
     for path in sorted(params_dir.glob("*.json")):
@@ -134,8 +142,14 @@ def plan_tasks(params_dir: Path, samples: int, working_dir: Path) -> deque[Task]
     ), reverse=True)
     tasks = deque()
     next_seed = {folder: 1 for folder in reserved}
-    for _ in range(samples):
+    remaining = {
+        folder: max(0, samples - len(seeds))
+        for folder, seeds in reserved.items()
+    }
+    while any(remaining[folder] for _, _, folder in configs):
         for path, config, folder in configs:
+            if not remaining[folder]:
+                continue
             seed = next_seed[folder]
             while seed in reserved[folder]:
                 seed += 1
@@ -144,6 +158,7 @@ def plan_tasks(params_dir: Path, samples: int, working_dir: Path) -> deque[Task]
             reserved[folder].add(seed)
             next_seed[folder] = seed + 1
             tasks.append(Task(path, config, seed))
+            remaining[folder] -= 1
     return tasks
 
 
@@ -212,19 +227,28 @@ def run(args: argparse.Namespace) -> int:
         raise FileNotFoundError("GNU time is required at /usr/bin/time")
     if not params_dir.is_dir():
         raise FileNotFoundError(f"Parameter directory not found: {params_dir}")
+    configurations = len(list(params_dir.glob("*.json")))
     tasks = plan_tasks(params_dir, args.samples, working_dir)
     if not tasks:
-        print("Nenhum JSON de parâmetros encontrado; nenhum job necessário.", flush=True)
+        message = ("Nenhum JSON de parâmetros encontrado; nenhum job necessário."
+                   if not configurations else
+                   "Nenhuma amostra pendente; todos os JSONs já atingiram a meta.")
+        print(message, flush=True)
         return 0
 
-    total_jobs = len(tasks)
+    # ``tasks`` contains only the missing outputs.  Progress, however, is
+    # expressed against the requested total so a resumed run starts at the
+    # number of samples already present instead of restarting from 1.
+    total_jobs = configurations * args.samples
+    already_done = total_jobs - len(tasks)
     report_path = working_dir / f"benchmark_N_{tasks[0].configuration['num_vertices']}.json"
     cpu = cpu_limit()
     running = {}
     done = 0
     largest_peak = 0
     benchmark = tasks.popleft()
-    print(f"Benchmark: {benchmark.parameter_file.name} (amostra 1/{total_jobs})", flush=True)
+    print(f"Benchmark: {benchmark.parameter_file.name} "
+          f"(amostra {already_done + 1}/{total_jobs})", flush=True)
     report = None
 
     def stop_on_sigterm(_signal_number, _frame):
@@ -246,7 +270,7 @@ def run(args: argparse.Namespace) -> int:
             stage_benchmark = read_stage_times(stages_file)
             if largest_peak < 1:
                 raise RuntimeError("Benchmark reported zero peak RAM")
-            done = 1
+            done = already_done + 1
             total, available = memory_limits()
             limit = capacity(total, largest_peak, cpu, args.max_jobs)
             if limit < 1:
@@ -264,6 +288,8 @@ def run(args: argparse.Namespace) -> int:
                 "initial_max_simultaneous_jobs": limit,
                 "current_max_simultaneous_jobs": limit,
                 "planned_jobs": total_jobs,
+                "scheduled_jobs": len(tasks) + 1,
+                "existing_jobs": already_done,
                 "completed_jobs": done,
                 "status": "running",
             }
@@ -357,7 +383,7 @@ def main() -> int:
     parser.add_argument("--params-dir", type=Path, required=True)
     parser.add_argument("--working-dir", type=Path, required=True)
     parser.add_argument("--samples", type=int, required=True,
-                        help="Number of new samples per JSON on this run")
+                        help="Target total number of samples per JSON")
     parser.add_argument("--max-jobs", "--max-threads", dest="max_jobs", type=int,
                         help="Maximum simultaneous jobs (threads in the launcher)")
     args = parser.parse_args()

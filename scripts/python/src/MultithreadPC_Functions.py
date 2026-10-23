@@ -39,7 +39,7 @@ def JsonGenerate(N: int, alpha_a: float, alpha_g: float, dim: int,
 
 
 def multithread_pc(N: int, NumSamples: int) -> Path:
-    """Generate a launcher; the first real sample calibrates peak RAM."""
+    """Generate a launcher that brings each JSON to NumSamples total outputs."""
     if NumSamples < 1:
         raise ValueError("NumSamples must be at least 1")
     launcher = SCRIPTS_DIR / f"N_{N}_multithread_pc.sh"
