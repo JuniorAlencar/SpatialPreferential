@@ -148,3 +148,24 @@ path_to_executable/exe1 path_to_json/example.json
 
 ## Data
 The data will be stored in <b>/gml_folde</b> and <b>/prop_folder</b>, where the gml file stores all the link pairs in the network, with the Euclidean distance between the site pairs and the degree of each site. While the prop file stores the value of the properties shortest average network path, network diameter and assortativity by degree
+
+### Processamento preservando os brutos
+
+Os dados de entrada permanecem em `Data/` (ou na raiz indicada). Para gerar uma
+árvore independente em `processed/`, com os manifestos e os parquets
+normalizados, execute:
+
+```bash
+bash tools/process_all_data.sh Data processed
+```
+
+Por padrão, a conversão dos GMLs usa quatro processos, cada qual escrevendo uma
+configuração independente. Para ajustar esse limite, use, por exemplo,
+`GML_WORKERS=6 bash tools/process_all_data.sh Data processed`.
+
+`processed/properties/manifest.csv` contém uma linha por CSV de `prop`, com o
+nome/origem e todos os valores extraídos; `all_data.csv` contém as médias.
+`processed/parquets/N_<N>/dim_<dim>/` contém os parquets consolidados
+diretamente dos arquivos `gml/*.gml.gz`; seu `manifest.csv` registra cada
+origem, caminho de saída, parâmetros, seed e os números de nós e arestas.
+Depois de validar essa saída, ela não depende dos arquivos brutos para análise.

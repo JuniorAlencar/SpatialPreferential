@@ -1,365 +1,135 @@
-import os
+"""Processamento dos CSVs ``prop`` sem escrever na árvore bruta."""
+from __future__ import annotations
+
 import csv
-import glob
 import re
 from math import nan
 from pathlib import Path
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
-# =========================
-# Auxiliares já usadas antes
-# =========================
-def create_folders(folder_path):
-    os.makedirs(folder_path, exist_ok=True)
-    print(f"Directory '{folder_path}' ensured to exist.")
-
-dict_keys = ["filename","ShortestCost","ShortestBFS","ShortestBFSSampled1000",
-             "R_Spearman","R_Spearman_err","R_Newman","R_Newman_err",
-             "ClusterCoefficient"]
-
-def _new_dict_props():
-    return {k: [] for k in dict_keys}
-
-def _norm(s: str) -> str:
-    """Normaliza nomes do cabeçalho para casar de forma robusta."""
-    return re.sub(r'[^a-z0-9]+', '', s.lower())
-
-NORM_MAP = {
-    _norm('MeanShortestPathDijstrika'): 'ShortestCost',
-    _norm('MeanShortestPathBFS'):       'ShortestBFS',
-    _norm('MeanShortestPathBFSSampled1000'): 'ShortestBFSSampled1000',
-    _norm('Ass_Spearman'):              'R_Spearman',
-    _norm('Ass_Spearman_error'):        'R_Spearman_err',
-    _norm('Ass_Newman'):                'R_Newman',
-    _norm('Ass_Newman_error'):          'R_Newman_err',
-    _norm('ClusterCoefficient'):        'ClusterCoefficient',
+VALUE_COLUMNS = ["filename", "ShortestCost", "ShortestBFS", "ShortestBFSSampled1000", "R_Spearman", "R_Spearman_err", "R_Newman", "R_Newman_err", "ClusterCoefficient"]
+HEADER_MAP = {
+    "meanshortestpathdijstrika": "ShortestCost", "meanshortestpathbfs": "ShortestBFS",
+    "meanshortestpathbfssampled1000": "ShortestBFSSampled1000", "assspearman": "R_Spearman",
+    "assspearmanerror": "R_Spearman_err", "assnewman": "R_Newman", "assnewmanerror": "R_Newman_err",
+    "clustercoefficient": "ClusterCoefficient",
 }
 
-# --- helper: carrega all_data.dat existente (se houver) ---
-def _load_existing_all_data(out_path: str):
-    if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
-        try:
-            df = pd.read_csv(out_path)  # sep=',' padrão, como salvamos
-            # garante que a coluna 'filename' exista
-            if "filename" not in df.columns:
-                return None
-            return df
-        except Exception:
-            return None
-    return None
 
-# --- helper: lista apenas CSVs "novos" (não presentes no all_data.dat) ---
-def _list_new_csvs(prop_dir: str, existing_df: pd.DataFrame | None):
-    all_csvs = sorted(glob.glob(os.path.join(prop_dir, "*.csv")))
-    if existing_df is None or existing_df.empty:
-        return all_csvs  # tudo é novo
+def _norm(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
 
-    already = set(existing_df["filename"].astype(str).str.strip())
-    new_files = [fp for fp in all_csvs if os.path.basename(fp) not in already]
-    return new_files
 
-def _read_header_and_first_data(csv_path):
-    """Retorna (header:list[str], data:list[str]) pegando:
-       - primeira linha não-vazia como header (removendo '#')
-       - primeira linha de dados não-vazia em seguida
-    """
-    header = None
-    data = None
-    with open(csv_path, 'rt', newline='') as f:
-        reader = csv.reader(f, delimiter=',', quotechar='|')
-        for row in reader:
-            if row and any(c.strip() for c in row):
-                header = [c.strip().lstrip('#') for c in row]
-                break
-        for row in reader:
-            if row and any(c.strip() for c in row):
-                data = row
-                break
-    return header, data
+def _prop_dirs(root: Path) -> list[Path]:
+    return sorted(root.glob("N_*/m0_*/dim_*/alpha_a_*_alpha_g_*/prop"))
 
-def add_csv_to_props(csv_path, out_dict):
-    header, data = _read_header_and_first_data(csv_path)
 
-    out_dict["filename"].append(os.path.basename(csv_path))
+def _params(prop: Path) -> tuple[int, int, int, float, float]:
+    text = prop.as_posix()
+    get = lambda pattern: re.search(pattern, text).group(1)
+    alpha = re.search(r"alpha_a_([+-]?\d+(?:\.\d+)?)_alpha_g_([+-]?\d+(?:\.\d+)?)", text)
+    if alpha is None:
+        raise ValueError(f"Parâmetros alpha ausentes: {prop}")
+    return int(get(r"(?:^|/)N_(\d+)(?:/|$)")), int(get(r"(?:^|/)m0_(\d+)(?:/|$)")), int(get(r"(?:^|/)dim_(\d+)(?:/|$)")), float(alpha.group(1)), float(alpha.group(2))
 
+
+def _read_csv(path: Path) -> dict[str, float | str]:
+    row: dict[str, float | str] = {column: nan for column in VALUE_COLUMNS}
+    row["filename"] = path.name
+    with path.open(encoding="utf-8", errors="replace", newline="") as stream:
+        reader = (values for values in csv.reader(stream, delimiter=",", quotechar="|") if values and any(value.strip() for value in values))
+        header, data = next(reader, None), next(reader, None)
     if not header or not data:
-        # arquivo vazio/sem dados
-        for k in dict_keys:
-            if k != "filename":
-                out_dict[k].append(nan)
-        return
-
-    idx_by_norm = {_norm(h): i for i, h in enumerate(header)}
-    for norm_name, key in NORM_MAP.items():
-        i = idx_by_norm.get(norm_name)
-        if i is None or i >= len(data) or data[i].strip() == '':
-            out_dict[key].append(nan)
-        else:
+        return row
+    positions = {_norm(name.strip().lstrip("#")): i for i, name in enumerate(header)}
+    for source, destination in HEADER_MAP.items():
+        index = positions.get(source)
+        if index is not None and index < len(data) and data[index].strip():
             try:
-                out_dict[key].append(float(data[i]))
+                row[destination] = float(data[index])
             except ValueError:
-                out_dict[key].append(nan)
+                pass
+    return row
 
-def process_folder(path, pattern="*.csv", out_dict=None):
-    """Processa todos os CSVs de 'path' e preenche out_dict."""
-    if out_dict is None:
-        out_dict = _new_dict_props()
-    files = sorted(glob.glob(os.path.join(path, pattern)))
-    for fp in files:
-        add_csv_to_props(fp, out_dict)
-    return out_dict
 
-# =========================
-# Nova lógica pedida
-# =========================
+def _sem(values: pd.Series) -> float:
+    values = values.dropna()
+    return np.nan if len(values) <= 1 else values.std(ddof=1) / np.sqrt(len(values))
 
-def _find_prop_dirs(root_path):
-    """Encontra todas as pastas 'prop' no padrão:
-       N_*/m0_*/dim_*/alpha_a_*_alpha_g_*/prop
-    """
-    pattern = os.path.join(
-        root_path,
-        "N_*", "m0_*", "dim_*", "alpha_a_*_alpha_g_*", "prop"
-    )
-    return sorted(glob.glob(pattern))
 
-def _is_prop_dir(path):
-    """Retorna True se 'path' parece ser a pasta 'prop' do padrão."""
-    # checa se termina com /prop e se o pai atende ao alpha_a_..._alpha_g_...
-    base = os.path.basename(os.path.normpath(path))
-    parent = os.path.basename(os.path.dirname(os.path.normpath(path)))
-    return (base == "prop") and bool(re.match(r"^alpha_a_.+_alpha_g_.+$", parent))
-
-# === SUBSTITUA sua create_data_folder por esta versão incremental ===
-def create_data_folder(path_root_or_prop):
-    """
-    Se receber o root (ex.: '../../data'), percorre toda a árvore e
-    cria/atualiza 'all_data.dat' em cada pasta 'prop' **apenas** se houver CSV novo.
-    Se receber diretamente uma pasta 'prop', processa só aquela.
-    (Não retorna nada; apenas imprime [SKIP] ou [UPDATE].)
-    """
-    import os
-    import pandas as pd
-
-    path_root_or_prop = os.path.normpath(path_root_or_prop)
-
-    def _process_one_prop(prop_dir: str):
-        out_path = os.path.join(prop_dir, "all_data.dat")
-
-        # 1) carrega all_data.dat existente (se houver)
-        existing_df = _load_existing_all_data(out_path)
-
-        # 2) descobre CSVs novos
-        new_csvs = _list_new_csvs(prop_dir, existing_df)
-
-        if not new_csvs:
-            print(f"[SKIP] Sem novos arquivos em: {prop_dir} — nada a fazer.")
-            return  # <- não faz nada e não retorna valor (None)
-
-        # 3) processa apenas os novos
-        dict_props = _new_dict_props()
-        for fp in new_csvs:
-            add_csv_to_props(fp, dict_props)
-
-        new_df = pd.DataFrame(dict_props)
-
-        # 4) concatena com existente (se houver) e alinha colunas
-        if existing_df is not None:
-            for col in set(existing_df.columns) - set(new_df.columns):
-                new_df[col] = pd.NA
-            for col in set(new_df.columns) - set(existing_df.columns):
-                existing_df[col] = pd.NA
-            df_out = pd.concat([existing_df, new_df], ignore_index=True)
-            if "filename" in df_out.columns:
-                df_out = df_out.drop_duplicates(subset=["filename"], keep="first")
-        else:
-            df_out = new_df
-
-        # 5) salva atualização
-        os.makedirs(prop_dir, exist_ok=True)
-        df_out.to_csv(out_path, index=False, sep=',', na_rep='NaN')
-        print("[UPDATE] Save in:", out_path)
-        return  # não retorna nada
-
-    # Caso: usuário passou diretamente uma pasta 'prop'
-    if _is_prop_dir(path_root_or_prop):
-        _process_one_prop(path_root_or_prop)
-        return  # nada a retornar
-
-    # Caso root: percorre todas as 'prop'
-    prop_dirs = _find_prop_dirs(path_root_or_prop)
-    if not prop_dirs:
-        print("Nenhuma pasta 'prop' encontrada sob:", path_root_or_prop)
-        return
-
-    for prop_dir in prop_dirs:
-        _process_one_prop(prop_dir)
-    # sem retorno -> não imprime [] no notebook
-
-# ==== parser dos parâmetros a partir do caminho ====
-_param_re = {
-    "N":       re.compile(r"(?:^|/)N_(\d+)(?:/|$)"),
-    "m0":      re.compile(r"(?:^|/)m0_(\d+)(?:/|$)"),
-    "dim":     re.compile(r"(?:^|/)dim_(\d+)(?:/|$)"),
-    "alphas":  re.compile(r"(?:^|/)alpha_a_([+-]?\d+(?:\.\d+)?)_alpha_g_([+-]?\d+(?:\.\d+)?)(?:/|$)")
-}
-
-def _parse_params_from_prop_dir(prop_dir: str):
-    path = os.path.normpath(prop_dir)
-    N   = int(_param_re["N"].search(path).group(1))
-    m0  = int(_param_re["m0"].search(path).group(1))
-    dim = int(_param_re["dim"].search(path).group(1))
-    a_match = _param_re["alphas"].search(path)
-    alpha_a = float(a_match.group(1))
-    alpha_g = float(a_match.group(2))
-    return N, m0, dim, alpha_a, alpha_g
-
-# ==== helpers numéricos ====
-def _sem(series: pd.Series):
-    s = series.dropna()
-    n = len(s)
-    if n <= 1:
+def _error(values: pd.Series, errors: pd.Series) -> float:
+    values = values.dropna()
+    if values.empty:
         return np.nan
-    return s.std(ddof=1) / np.sqrt(n)
+    return np.sqrt(_sem(values) ** 2 + np.square(errors.reindex(values.index).dropna()).sum() / len(values) ** 2)
 
-def _combined_error_with_per_sample(values: pd.Series, per_sample_errs: pd.Series):
-    """sqrt( SEM^2 + (sum(err_i^2))/n^2 ), com n = número de valores válidos."""
-    v = values.dropna()
-    n = len(v)
-    if n == 0:
-        return np.nan
-    sem = _sem(v)
-    if per_sample_errs is None or per_sample_errs.empty:
-        return sem
-    e = per_sample_errs.dropna()
-    # alinhar índices para evitar confusão:
-    e = e.reindex(v.index)
-    sum_sigma2 = np.nansum(np.square(e.to_numpy()))
-    return np.sqrt((sem ** 2) + (sum_sigma2 / (n ** 2)))
 
-# ==== função principal pedida ====
-def build_all_means(root_or_prop_path: str, output_path: str | os.PathLike | None = None):
-    """
-    Percorre cada pasta 'prop' que tiver um 'all_data.dat' e monta o dict_all_data
-    com médias e erros.
+def _aggregate(rows: pd.DataFrame, params: tuple[int, int, int, float, float]) -> dict:
+    N, m0, dim, alpha_a, alpha_g = params
+    num = lambda name: pd.to_numeric(rows[name], errors="coerce")
+    cost, bfs, sampled = num("ShortestCost"), num("ShortestBFS"), num("ShortestBFSSampled1000")
+    spearman, newman, cluster = num("R_Spearman"), num("R_Newman"), num("ClusterCoefficient")
+    return {"N": N, "m0": m0, "dim": dim, "alpha_a": alpha_a, "alpha_g": alpha_g, "N_samples": len(rows),
+            "Short_Cost_mean": cost.mean(), "Short_Cost_error": _sem(cost), "Short_BFS_mean": bfs.mean(), "Short_BFS_error": _sem(bfs),
+            "Short_BFS_sampled_1000_mean": sampled.mean(), "Short_BFS_sampled_1000_error": _sem(sampled),
+            "R_Spearman_mean": spearman.mean(), "R_Spearman_error": _error(spearman, num("R_Spearman_err")),
+            "R_Newman_mean": newman.mean(), "R_Newman_error": _error(newman, num("R_Newman_err")),
+            "ClusterCoefficient_mean": cluster.mean(), "ClusterCoefficient_error": _sem(cluster)}
 
-    O CSV consolidado e' salvo em ``<root>/all_data.csv`` por padrao.
-    Retorna (dict_all_data, df_all).
-    """
-    root_or_prop_path = os.path.normpath(root_or_prop_path)
 
-    # onde procurar:
-    if _is_prop_dir(root_or_prop_path):
-        prop_dirs = [root_or_prop_path]
-    else:
-        prop_dirs = _find_prop_dirs(root_or_prop_path)
-
-    dict_all_data = {
-        "N":[], "m0":[], "dim":[], "alpha_a":[], "alpha_g":[],
-        "N_samples":[], "Short_Cost_mean":[], "Short_Cost_error":[],
-        "Short_BFS_mean":[], "Short_BFS_error":[],
-        "Short_BFS_sampled_1000_mean":[], "Short_BFS_sampled_1000_error":[],
-        "R_Spearman_mean":[], "R_Spearman_error":[],
-        "R_Newman_mean":[],  "R_Newman_error":[],
-        "ClusterCoefficient_mean":[], "ClusterCoefficient_error":[]
-    }
-
-    for prop_dir in prop_dirs:
-        all_data_path = os.path.join(prop_dir, "all_data.dat")
-        if not os.path.exists(all_data_path):
-            # não há resumo nessa pasta ainda
+def _build_from_processed(output: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Reconstrói manifest global e agregado a partir dos manifests processados."""
+    manifests, aggregates = [], []
+    pattern = "N_*/m0_*/dim_*/alpha_a_*_alpha_g_*/prop_manifest.csv"
+    for manifest_path in sorted(output.glob(pattern)):
+        rows = pd.read_csv(manifest_path)
+        if rows.empty:
             continue
+        params = _params(manifest_path.parent)
+        N, m0, dim, alpha_a, alpha_g = params
+        relative_combo = manifest_path.parent.relative_to(output)
+        global_manifest = rows.copy()
+        for name, value in reversed(list(zip(["N", "m0", "dim", "alpha_a", "alpha_g"], params))):
+            global_manifest.insert(0, name, value)
+        global_manifest.insert(5, "source_path", [str(relative_combo / "prop" / filename) for filename in rows["filename"]])
+        manifests.append(global_manifest)
+        aggregates.append(_aggregate(rows, (N, m0, dim, alpha_a, alpha_g)))
 
-        try:
-            df = pd.read_csv(all_data_path)
-        except Exception:
-            # arquivo corrompido ou separador diferente
-            try:
-                df = pd.read_csv(all_data_path, sep='\t')
-            except Exception:
-                print(f"[WARN] Não consegui ler {all_data_path}. Pulando.")
-                continue
+    columns = ["N", "m0", "dim", "alpha_a", "alpha_g", "source_path", *VALUE_COLUMNS]
+    manifest = pd.concat(manifests, ignore_index=True) if manifests else pd.DataFrame(columns=columns)
+    return manifest, pd.DataFrame(aggregates)
 
-        # extrai parâmetros do caminho
-        N, m0, dim, alpha_a, alpha_g = _parse_params_from_prop_dir(prop_dir)
 
-        # N_samples = número de linhas (arquivos) válidas
-        n_samples = len(df.index)
+def processing_all_data(raw_root: str | Path, processed_root: str | Path | None = None):
+    """Atualiza manifests de ``prop`` e agrega exclusivamente a partir de processed.
 
-        # pega colunas (se não existirem, vira série vazia p/ dar NaN)
-        def col(name):
-            if name not in df.columns:
-                return pd.Series(dtype=float)
-            return pd.to_numeric(df[name], errors="coerce")
-
-        shortest_cost = col("ShortestCost")
-        shortest_bfs  = col("ShortestBFS")
-        shortest_bfs_sampled_1000 = col("ShortestBFSSampled1000")
-        r_spear       = col("R_Spearman")
-        r_spear_err   = col("R_Spearman_err")  # erros por amostra
-        r_new         = col("R_Newman")
-        r_new_err     = col("R_Newman_err")
-        cluster       = col("ClusterCoefficient")
-
-        # MÉDIAS (ignorando NaN)
-        sc_mean  = shortest_cost.mean(skipna=True)
-        sb_mean  = shortest_bfs.mean(skipna=True)
-        sbs_mean = shortest_bfs_sampled_1000.mean(skipna=True)
-        rs_mean  = r_spear.mean(skipna=True)
-        rn_mean  = r_new.mean(skipna=True)
-        cc_mean  = cluster.mean(skipna=True)
-
-        # ERROS
-        sc_err = _sem(shortest_cost)
-        sb_err = _sem(shortest_bfs)
-        sbs_err = _sem(shortest_bfs_sampled_1000)
-        # combina SEM com erros individuais reportados
-        rs_err = _combined_error_with_per_sample(r_spear, r_spear_err)
-        rn_err = _combined_error_with_per_sample(r_new,   r_new_err)
-        cc_err = _sem(cluster)
-
-        # preenche dicionário
-        dict_all_data["N"].append(N)
-        dict_all_data["m0"].append(m0)
-        dict_all_data["dim"].append(dim)
-        dict_all_data["alpha_a"].append(alpha_a)
-        dict_all_data["alpha_g"].append(alpha_g)
-
-        dict_all_data["N_samples"].append(int(n_samples))
-
-        dict_all_data["Short_Cost_mean"].append(sc_mean)
-        dict_all_data["Short_Cost_error"].append(sc_err)
-
-        dict_all_data["Short_BFS_mean"].append(sb_mean)
-        dict_all_data["Short_BFS_error"].append(sb_err)
-        dict_all_data["Short_BFS_sampled_1000_mean"].append(sbs_mean)
-        dict_all_data["Short_BFS_sampled_1000_error"].append(sbs_err)
-
-        dict_all_data["R_Spearman_mean"].append(rs_mean)
-        dict_all_data["R_Spearman_error"].append(rs_err)
-
-        dict_all_data["R_Newman_mean"].append(rn_mean)
-        dict_all_data["R_Newman_error"].append(rn_err)
-
-        dict_all_data["ClusterCoefficient_mean"].append(cc_mean)
-        dict_all_data["ClusterCoefficient_error"].append(cc_err)
-
-    df_all = pd.DataFrame(dict_all_data)
-
-    if output_path is None:
-        if _is_prop_dir(root_or_prop_path):
-            # prop -> alpha -> dim -> m0 -> N -> Data
-            output_path = Path(root_or_prop_path).resolve().parents[4] / "all_data.csv"
-        else:
-            output_path = Path(root_or_prop_path) / "all_data.csv"
-
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df_all.to_csv(output_path, sep=",", index=False)
-    print(f"[UPDATE] Save aggregate data in: {output_path}")
-    return dict_all_data, df_all
-
-def processing_all_data(root):
-    create_data_folder(root)   # percorre toda a árvore e cria um all_data.dat em cada 'prop/'
-    return build_all_means(root)
+    A árvore bruta é usada somente para criar/atualizar ``prop_manifest.csv``.
+    ``all_data.csv`` é sempre calculado dos manifests em ``processed/properties``;
+    portanto pode ser regenerado mesmo depois de apagar os dados brutos.
+    """
+    raw_root = Path(raw_root).resolve()
+    processed_root = Path(processed_root or raw_root.parent / "processed").resolve()
+    output = processed_root / "properties"
+    for prop in _prop_dirs(raw_root):
+        relative = prop.relative_to(raw_root)
+        per_combo = output / relative.parent / "prop_manifest.csv"
+        existing = pd.read_csv(per_combo) if per_combo.exists() else pd.DataFrame(columns=VALUE_COLUMNS)
+        done = set(existing.get("filename", pd.Series(dtype=str)).dropna().astype(str))
+        new_paths = [path for path in sorted(prop.glob("*.csv")) if path.name not in done]
+        if not new_paths:
+            print(f"[SKIP] prop: {relative} (todos os CSVs já estão no manifesto)")
+            continue
+        rows = pd.DataFrame([_read_csv(path) for path in new_paths], columns=VALUE_COLUMNS)
+        per_combo.parent.mkdir(parents=True, exist_ok=True)
+        combined = rows if existing.empty else pd.concat([existing, rows], ignore_index=True)
+        combined.to_csv(per_combo, index=False, na_rep="NaN")
+        print(f"[OK] prop: {relative} ({len(rows)} novos) -> {per_combo.relative_to(processed_root)}")
+    output.mkdir(parents=True, exist_ok=True)
+    manifest, aggregate = _build_from_processed(output)
+    manifest.to_csv(output / "manifest.csv", index=False, na_rep="NaN")
+    aggregate.to_csv(output / "all_data.csv", index=False, na_rep="NaN")
+    print(f"[OK] manifesto global: {output / 'manifest.csv'}")
+    print(f"[OK] agregado: {output / 'all_data.csv'}")
+    return aggregate.to_dict("list"), aggregate

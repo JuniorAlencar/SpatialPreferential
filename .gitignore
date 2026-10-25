@@ -7,7 +7,7 @@
 /build
 /parms
 data/N_*/
-data_2/N_*/
+/processed/
 data_*/
 Data_*/
 /Data
@@ -40,6 +40,7 @@ __pycache__/
 
 # data folders
 data/
+processed/
 
 
 # */gml/*

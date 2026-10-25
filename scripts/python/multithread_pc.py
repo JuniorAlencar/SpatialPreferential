@@ -1,7 +1,16 @@
 import src.MultithreadPC_Functions as FunctionsFile
+
+import numpy as np
+
 N = 10**5
 dim = 2
-alpha_a = [i * dim for i in range(9)]
+alpha_a_MID = dim
+alpha_a_MAX = 2*dim
+alpha_a = np.concatenate([
+    np.linspace(0, alpha_a_MID, 10),
+    np.linspace(alpha_a_MID, alpha_a_MAX, 10)[1:]
+])
+
 alpha_g = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 m0 = 2
 NumSamples = 50

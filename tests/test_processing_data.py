@@ -10,7 +10,7 @@ sys.path.insert(0, str(TOOLS_DIR))
 from src.processing_data import processing_all_data
 
 
-def test_processing_writes_aggregate_into_data_root(tmp_path):
+def test_processing_writes_manifests_outside_raw_data_root(tmp_path):
     prop_dir = (
         tmp_path / "Data" / "N_100" / "m0_2" / "dim_3"
         / "alpha_a_1.50_alpha_g_2.00" / "prop"
@@ -30,8 +30,9 @@ def test_processing_writes_aggregate_into_data_root(tmp_path):
 
     _, result = processing_all_data(tmp_path / "Data")
 
-    output_path = tmp_path / "Data" / "all_data.csv"
+    output_path = tmp_path / "processed" / "properties" / "all_data.csv"
     assert output_path.exists()
+    assert not (prop_dir / "all_data.dat").exists()
     persisted = pd.read_csv(output_path)
     assert len(result) == len(persisted) == 1
 
@@ -42,3 +43,19 @@ def test_processing_writes_aggregate_into_data_root(tmp_path):
     assert row["Short_Cost_mean"] == 3.0
     assert row["Short_BFS_mean"] == 5.0
     assert row["Short_BFS_sampled_1000_mean"] == 5.5
+
+    manifest = pd.read_csv(tmp_path / "processed" / "properties" / "manifest.csv")
+    assert manifest["filename"].tolist() == ["prop_1.csv", "prop_2.csv"]
+    assert manifest["source_path"].tolist() == [
+        "N_100/m0_2/dim_3/alpha_a_1.50_alpha_g_2.00/prop/prop_1.csv",
+        "N_100/m0_2/dim_3/alpha_a_1.50_alpha_g_2.00/prop/prop_2.csv",
+    ]
+
+    # O agregado é refeito a partir de processed, mesmo sem a árvore bruta.
+    _, rebuilt = processing_all_data(tmp_path / "Data-removida")
+    assert len(rebuilt) == 1
+    assert rebuilt.iloc[0]["Short_Cost_mean"] == 3.0
+
+    # Uma nova execução não duplica CSVs já registrados no manifesto.
+    _, skipped = processing_all_data(tmp_path / "Data")
+    assert skipped.iloc[0]["N_samples"] == 2
