@@ -160,7 +160,7 @@ def _write_combo_worker(raw_root: str, gml_dir: str, output: str, existing: list
 
 
 def _default_workers() -> int:
-    return min(4, os.cpu_count() or 1)
+    return 11
 
 
 def rewrite_parquets(raw_root: str | Path, processed_root: str | Path, force: bool = False, workers: int | None = None):
@@ -203,7 +203,7 @@ def main() -> None:
     parser.add_argument("--input", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--force", action="store_true", help="reprocessa todos os GMLs")
-    parser.add_argument("--workers", type=int, default=None)
+    parser.add_argument("--workers", type=int, default=None, help="processos simultâneos (padrão: 11)")
     parser.add_argument("--overwrite", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     rewrite_parquets(args.input, args.output, args.force or args.overwrite, args.workers)

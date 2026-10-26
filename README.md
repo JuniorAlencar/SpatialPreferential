@@ -159,7 +159,7 @@ normalizados, execute:
 bash tools/process_all_data.sh Data processed
 ```
 
-Por padrão, a conversão dos GMLs usa quatro processos, cada qual escrevendo uma
+Por padrão, a conversão dos GMLs usa 11 processos, cada qual escrevendo uma
 configuração independente. Para ajustar esse limite, use, por exemplo,
 `GML_WORKERS=6 bash tools/process_all_data.sh Data processed`.
 
